@@ -8,7 +8,7 @@ use crate::git::{Git, Keep, LogEntry, SyncStatus};
 use crate::identity;
 use crate::AppState;
 use base64::Engine;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::State;
 
@@ -284,6 +284,29 @@ pub async fn secret_seal_text(state: State<'_, AppState>, chamber_id: String, pa
 pub async fn secret_remove(state: State<'_, AppState>, chamber_id: String, path: String) -> Result<()> {
     let (c, _) = open_chamber(&state, &chamber_id)?;
     c.remove(&path)
+}
+
+/// Remove several secrets in one commit (deleting a folder with its contents).
+#[tauri::command]
+pub async fn secrets_remove(state: State<'_, AppState>, chamber_id: String, paths: Vec<String>) -> Result<usize> {
+    let (c, _) = open_chamber(&state, &chamber_id)?;
+    c.remove_many(&paths)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretMove {
+    pub from: String,
+    pub to: String,
+}
+
+/// Rename or re-folder secrets in one commit. Used for "Move to folder",
+/// folder rename, and drag-and-drop between folders.
+#[tauri::command]
+pub async fn secrets_move(state: State<'_, AppState>, chamber_id: String, moves: Vec<SecretMove>) -> Result<usize> {
+    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let pairs: Vec<(String, String)> = moves.into_iter().map(|m| (m.from, m.to)).collect();
+    c.move_secrets(&pairs)
 }
 
 #[tauri::command]

@@ -123,6 +123,8 @@ export class BackendService {
 	sealFiles(chamberId: string, files: string[], folder?: string) { return this.call<SealResult>('secret_seal_files', { chamberId, files, folder: folder ?? null }); }
 	sealText(chamberId: string, path: string, text: string) { return this.call<boolean>('secret_seal_text', { chamberId, path, text }); }
 	removeSecret(chamberId: string, path: string) { return this.call<void>('secret_remove', { chamberId, path }); }
+	moveSecrets(chamberId: string, moves: { from: string; to: string }[]) { return this.call<number>('secrets_move', { chamberId, moves }); }
+	removeSecrets(chamberId: string, paths: string[]) { return this.call<number>('secrets_remove', { chamberId, paths }); }
 	history(chamberId: string, path: string) { return this.call<LogEntry[]>('secret_history', { chamberId, path }); }
 	syncStatus(chamberId: string) { return this.call<SyncStatus>('sync_status', { chamberId }); }
 	syncNow(chamberId: string) { return this.call<SyncStatus>('sync_now', { chamberId }); }
@@ -174,6 +176,18 @@ class DemoBackend {
 			}
 			case 'secret_seal_text': this.secrets.set(args.path as string, args.text as string); this.sealedAt.set(args.path as string, now); return true as T;
 			case 'secret_remove': this.secrets.delete(args.path as string); return undefined as T;
+			case 'secrets_remove': { let n = 0; for (const p of args.paths as string[]) if (this.secrets.delete(p)) n++; return n as T; }
+			case 'secrets_move': {
+				const moves = args.moves as { from: string; to: string }[];
+				for (const m of moves) {
+					const v = this.secrets.get(m.from);
+					if (v === undefined || m.from === m.to) continue;
+					if (this.secrets.has(m.to)) throw { kind: 'error', message: `${m.to} already exists`, paths: [] };
+					this.secrets.delete(m.from); this.secrets.set(m.to, v);
+					const at = this.sealedAt.get(m.from); if (at) { this.sealedAt.delete(m.from); this.sealedAt.set(m.to, at); }
+				}
+				return moves.length as T;
+			}
 			case 'secret_history': return [{ hash: 'abc1234', date: now, author: 'you', subject: `Seal ${args.path}` }] as T;
 			case 'sync_status': case 'sync_now': return { branch: 'main', remote: 'git@github.com:you/secrets.git', ahead: 0, behind: 0, dirty: false, mergeInProgress: false, conflicts: [] } as T;
 			case 'keepers_list': return [{ publicKey: 'age1demo000000000000000000000000000000000000000000000000000000', label: 'you (this browser)' }] as T;

@@ -59,6 +59,8 @@ pub fn run() {
             commands::secret_seal_files,
             commands::secret_seal_text,
             commands::secret_remove,
+            commands::secrets_move,
+            commands::secrets_remove,
             commands::secret_history,
             commands::sync_status,
             commands::sync_now,

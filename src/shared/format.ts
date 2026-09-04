@@ -37,6 +37,14 @@ export function roomOf(path: string): string {
 	return i < 0 ? '' : path.slice(0, i);
 }
 
+/** Clean a user-typed folder name into a vault-relative folder path, or '' when unusable. Mirrors `normalize_rel` in Rust. */
+export function normalizeFolder(input: string): string {
+	const segs = input.trim().replace(/\\/g, '/').split('/').map((s) => s.trim()).filter((s) => s.length > 0);
+	if (segs.length === 0) return '';
+	if (segs.some((s) => s === '.' || s === '..' || /[\x00-\x1f<>:"|?*]/.test(s))) return '';
+	return segs.join('/');
+}
+
 export function extOf(path: string): string {
 	const name = fileName(path);
 	const i = name.lastIndexOf('.');

@@ -8,7 +8,7 @@ Started 2026-09-04 as a product version of Rick's personal `~/.secrets` vault (a
 
 - **Chamber** — one git repo + a keepers list. The app manages several; the sidebar switcher picks one.
 - **Keeper** — a person/device with an age public key in `.chamber/recipients`. Only keepers can open the chamber.
-- **Room** — a folder inside the vault (`foundry/railway.env` is in room `foundry`).
+- **Folder** — a directory inside the vault (`foundry/railway.env` is in folder `foundry`). Derived from paths; empty folders exist only in UI state (`pendingFolders`) until a secret lands in them. Code still says `room`/`roomOf` in places; UI text says folder.
 - **Seal** — encrypt + commit. **Sync** — fetch, merge, push.
 
 ## Layout
@@ -72,4 +72,5 @@ npm run icon            # regenerate icons from icon-source.svg (keep the ~10% m
 ## Status / next
 
 Done: scaffold compiles and launches; welcome → create chamber → drop files → masked viewer → sync/conflict UI → keepers/history/settings dialogs → join flow with auth ladder.
-Not yet verified end to end on a real remote. Open items: CI/release workflow (tauri-action), Windows/Linux smoke test, GCM install guidance in-app, "Move to room…", encrypted filenames (optional), light theme, QR device pairing.
+Folders: `+` creates inside the selected folder; right-click / ⋯ on a sidebar folder → New folder inside, Rename (leaf only), Move to…, Delete (keep secrets and move them up, or delete all). Drag rows or folders onto folders (pointer events, since Tauri's dragDropEnabled breaks HTML5 DnD). Backend: `secrets_move` renames ciphertext only (no re-encrypt); `secrets_remove` deletes many in one commit. Dialogs are `<ml-dialog #name>` opened via DialogService, never `el.open()`.
+Not yet verified end to end on a real remote. Open items: CI/release workflow (tauri-action), Windows/Linux smoke test, GCM install guidance in-app, encrypted filenames (optional), light theme, QR device pairing.

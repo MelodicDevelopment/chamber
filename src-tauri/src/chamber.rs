@@ -276,6 +276,86 @@ impl Chamber {
         Ok(())
     }
 
+    /// Remove several secrets in one commit (used for deleting a folder).
+    pub fn remove_many(&self, rels: &[String]) -> Result<usize> {
+        let mut index = self.index()?;
+        let mut removed = 0usize;
+        for rel in rels {
+            let rel = normalize_rel(rel)?;
+            let p = self.cipher_path(&rel);
+            if p.exists() {
+                std::fs::remove_file(&p)?;
+                removed += 1;
+            }
+            self.prune_empty_dirs(&rel);
+            index.entries.remove(&rel);
+        }
+        if removed == 0 {
+            return Ok(0);
+        }
+        self.write_index(&index)?;
+        let msg = match rels {
+            [one] => format!("Remove {one}"),
+            many => format!("Remove {} secrets", many.len()),
+        };
+        self.git.commit_paths(&[META_DIR, VAULT_DIR], &msg)?;
+        Ok(removed)
+    }
+
+    /// Rename secrets in one commit. Each pair is (from, to) as vault-relative
+    /// paths. Ciphertext is moved as-is; nothing is decrypted or re-encrypted.
+    pub fn move_secrets(&self, moves: &[(String, String)]) -> Result<usize> {
+        let mut index = self.index()?;
+        let mut pending: Vec<(String, String)> = vec![];
+        for (from, to) in moves {
+            let from = normalize_rel(from)?;
+            let to = normalize_rel(to)?;
+            if from == to {
+                continue;
+            }
+            if !self.cipher_path(&from).exists() {
+                return Err(AppError::msg(format!("no secret at {from}")));
+            }
+            if self.cipher_path(&to).exists() || pending.iter().any(|(_, t)| *t == to) {
+                return Err(AppError::msg(format!("{to} already exists")));
+            }
+            pending.push((from, to));
+        }
+        if pending.is_empty() {
+            return Ok(0);
+        }
+        for (from, to) in &pending {
+            let dst = self.cipher_path(to);
+            if let Some(parent) = dst.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::rename(self.cipher_path(from), &dst)?;
+            self.prune_empty_dirs(from);
+            if let Some(mut e) = index.entries.remove(from) {
+                e.path = to.clone();
+                index.entries.insert(to.clone(), e);
+            }
+        }
+        self.write_index(&index)?;
+        let msg = match pending.as_slice() {
+            [(from, to)] => format!("Move {from} -> {to}"),
+            many => format!("Move {} secrets", many.len()),
+        };
+        self.git.commit_paths(&[META_DIR, VAULT_DIR], &msg)?;
+        Ok(pending.len())
+    }
+
+    /// Remove now-empty parent directories of a vault path (git won't track them anyway).
+    fn prune_empty_dirs(&self, rel: &str) {
+        let vault = self.root.join(VAULT_DIR);
+        let mut dir = self.cipher_path(rel);
+        while dir.pop() && dir != vault && dir.starts_with(&vault) {
+            if std::fs::remove_dir(&dir).is_err() {
+                break;
+            }
+        }
+    }
+
     /// A previous version, straight out of git history.
     pub fn decrypt_at(&self, identity: &x25519::Identity, rev: &str, rel: &str) -> Result<Vec<u8>> {
         let cipher = self.git.show_bytes(rev, &format!("{VAULT_DIR}/{rel}.age"))?;

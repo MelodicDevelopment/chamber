@@ -1,12 +1,14 @@
 import { MelodicComponent } from '@melodicdev/core/components';
 import { Service } from '@melodicdev/core/injection';
 import { RouterService } from '@melodicdev/core/routing';
-import { ToastService } from '@melodicdev/components';
+import { ToastService, DialogService } from '@melodicdev/components';
 import { vaultPageTemplate } from './vault-page.template';
 import { vaultPageStyles } from './vault-page.styles';
 import { BackendService, asAppError, isDesktop, type AppStatus, type ChamberSummary, type Entry, type SecretContent, type SyncStatus, type LogEntry, type Recipient } from '../../services/backend.service';
 import { parseEnv, looksLikeEnv, mask, type EnvLine } from '../../shared/env';
-import { kindOf, roomOf } from '../../shared/format';
+import { kindOf, roomOf, fileName, normalizeFolder } from '../../shared/format';
+
+type DialogId = Parameters<DialogService['close']>[0];
 
 const REVEAL_MS = 30_000;
 const CLIPBOARD_MS = 30_000;
@@ -20,6 +22,7 @@ export class VaultPage {
 	@Service(BackendService) readonly backend!: BackendService;
 	@Service(RouterService) readonly router!: RouterService;
 	@Service(ToastService) private readonly toast!: ToastService;
+	@Service(DialogService) private readonly dialogs!: DialogService;
 
 	status: AppStatus | null = null;
 	chambers: ChamberSummary[] = [];
@@ -47,8 +50,30 @@ export class VaultPage {
 	dragCount = 0;
 	dropRoom = '';
 
-	busy: '' | 'create' | 'keeper' | 'edit' | 'delete' | 'kit' = '';
+	/** Folders the user created that have no secrets yet (git cannot store them, so they live here until used). */
+	pendingFolders: string[] = [];
+	/** In-app drag of a secret row (or a sidebar folder) onto a sidebar folder. */
+	moving: string | null = null;
+	movingFolder: string | null = null;
+	/** Right-click / "⋯" menu on a sidebar folder. */
+	folderMenu: { name: string; x: number; y: number } | null = null;
+	/** Folder the folder dialogs act on (from the menu), falling back to the one open in the list. */
+	menuFolder: string | null = null;
+	moveTo: string | null = null;
+	ghostX = 0;
+	ghostY = 0;
+	private _dragStart: { x: number; y: number; path: string; kind: 'secret' | 'folder' } | null = null;
+	private _didDrag = false;
+
+	busy: '' | 'create' | 'keeper' | 'edit' | 'delete' | 'kit' | 'folder' | 'move' | 'add' = '';
 	newName = '';
+	addName = '';
+	addValue = '';
+	folderName = '';
+	renameName = '';
+	moveTarget = '';
+	moveNewFolder = '';
+	folderMoveTarget = '';
 	newRemote = '';
 	newKeeperKey = '';
 	newKeeperLabel = '';
@@ -63,13 +88,34 @@ export class VaultPage {
 
 	// ---- derived ------------------------------------------------------------
 
-	get rooms(): { name: string; count: number }[] {
+	/** Every folder (including ancestors of nested ones) with the number of secrets inside it, nested ones included. */
+	get rooms(): { name: string; label: string; depth: number; count: number }[] {
 		const m = new Map<string, number>();
+		const touch = (folder: string, n: number) => {
+			const segs = folder.split('/');
+			for (let i = 1; i <= segs.length; i++) {
+				const k = segs.slice(0, i).join('/');
+				m.set(k, (m.get(k) ?? 0) + n);
+			}
+		};
 		for (const e of this.entries) {
 			const r = roomOf(e.path);
-			if (r) m.set(r, (m.get(r) ?? 0) + 1);
+			if (r) touch(r, 1);
 		}
-		return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count }));
+		for (const f of this.pendingFolders) if (!m.has(f)) touch(f, 0);
+		return [...m.entries()]
+			.sort((a, b) => a[0].localeCompare(b[0]))
+			.map(([name, count]) => ({ name, label: name.split('/').pop() ?? name, depth: name.split('/').length - 1, count }));
+	}
+
+	/** The folder currently open in the list, or null for All / Recent. */
+	get currentFolder(): string | null {
+		return this.room && this.room !== 'recent' ? this.room : null;
+	}
+
+	/** Secrets inside a folder, nested ones included. */
+	entriesIn(folder: string): Entry[] {
+		return this.entries.filter((e) => roomOf(e.path) === folder || roomOf(e.path).startsWith(folder + '/'));
 	}
 
 	get filtered(): Entry[] {
@@ -124,6 +170,8 @@ export class VaultPage {
 
 	onDestroy() {
 		this._unlisten?.();
+		window.removeEventListener('pointermove', this._onRowMove);
+		window.removeEventListener('pointerup', this._onRowUp);
 		window.removeEventListener('keydown', this._onKey);
 		if (this._tick) clearInterval(this._tick);
 		if (this._pollTimer) clearInterval(this._pollTimer);
@@ -135,7 +183,10 @@ export class VaultPage {
 			e.preventDefault();
 			(this.root()?.querySelector('.search input') as HTMLInputElement | null)?.focus();
 		}
-		if (e.key === 'Escape') this.menuOpen = false;
+		if (e.key === 'Escape') {
+			this.menuOpen = false;
+			this.folderMenu = null;
+		}
 	};
 
 	private root(): ParentNode | null {
@@ -143,12 +194,13 @@ export class VaultPage {
 		return ref?.shadowRoot ?? ref ?? null;
 	}
 
+	/** Dialogs are `<ml-dialog #name>`; the `#name` attribute is the id the DialogService knows them by. */
 	openDialog(id: string) {
 		this.menuOpen = false;
-		(this.root()?.querySelector(`#${id}`) as { open?: () => void } | null)?.open?.();
+		this.dialogs.open(id as DialogId);
 	}
 	closeDialog(id: string) {
-		(this.root()?.querySelector(`#${id}`) as { close?: () => void } | null)?.close?.();
+		this.dialogs.close(id as DialogId);
 	}
 
 	// ---- data ---------------------------------------------------------------
@@ -198,6 +250,7 @@ export class VaultPage {
 		await this.backend.selectChamber(id);
 		this.clearSelection();
 		this.room = null;
+		this.pendingFolders = [];
 		await this.refresh();
 	}
 
@@ -292,12 +345,55 @@ export class VaultPage {
 
 	private targetRoom(): string | undefined {
 		if (this.dropRoom) return this.dropRoom;
-		return this.room && this.room !== 'recent' ? this.room : undefined;
+		return this.currentFolder ?? undefined;
+	}
+
+	/** Add secret: a name and a value typed in, sealed into the open folder. Files are the alternative, not the default. */
+	openAdd() {
+		this.addName = '';
+		this.addValue = '';
+		this.openDialog('add');
+	}
+
+	get addPath(): string {
+		const leaf = normalizeFolder(this.addName);
+		if (!leaf) return '';
+		return this.currentFolder ? `${this.currentFolder}/${leaf}` : leaf;
+	}
+
+	async addSecret() {
+		if (!this.current) return;
+		const path = this.addPath;
+		if (!path) {
+			this.toast.error('Give it a name', 'Something like DATABASE_URL or railway.env.');
+			return;
+		}
+		if (this.entries.some((e) => e.path === path)) {
+			this.toast.error('That name is taken here', 'Open the existing secret and use Edit instead.');
+			return;
+		}
+		this.busy = 'add';
+		try {
+			await this.backend.sealText(this.current.id, path, this.addValue);
+			this.closeDialog('add');
+			await this.loadEntries();
+			this.pendingFolders = this.pendingFolders.filter((f) => f !== this.currentFolder);
+			await this.open(path);
+			this.toast.success('Sealed', this.currentFolder ? `into ${this.currentFolder}` : undefined);
+			this.addName = this.addValue = '';
+			this.refreshSync();
+		} catch (e) {
+			this.toast.error('Could not seal', asAppError(e).message);
+		} finally {
+			this.busy = '';
+		}
 	}
 
 	async addFiles() {
 		const files = await this.backend.pickFiles();
-		if (files?.length) await this.sealPaths(files, this.targetRoom());
+		if (!files?.length) return;
+		this.closeDialog('add');
+		await this.sealPaths(files, this.targetRoom());
 	}
 
 	async sealPaths(files: string[], folder?: string) {
@@ -498,6 +594,302 @@ export class VaultPage {
 			this.toast.error('Could not save the kit', asAppError(e).message);
 		} finally {
 			this.busy = '';
+		}
+	}
+
+	// ---- folders ------------------------------------------------------------------
+
+	/** Folder the folder dialogs act on. */
+	get targetFolder(): string | null {
+		return this.menuFolder ?? this.currentFolder;
+	}
+
+	/** Folders a given folder could be moved into: everything except itself and its descendants. */
+	folderTargetsFor(folder: string) {
+		return this.rooms.filter((r) => r.name !== folder && !r.name.startsWith(folder + '/'));
+	}
+
+	openFolderMenu(e: MouseEvent, name: string) {
+		e.preventDefault();
+		e.stopPropagation();
+		this.menuOpen = false;
+		this.folderMenu = { name, x: e.clientX, y: e.clientY };
+	}
+
+	/** Run a folder action from the context menu. */
+	folderAction(action: 'new' | 'rename' | 'move' | 'delete') {
+		const name = this.folderMenu?.name ?? null;
+		this.folderMenu = null;
+		if (!name) return;
+		this.menuFolder = name;
+		if (action === 'new') {
+			this.room = name;
+			this.folderName = '';
+			this.openDialog('new-folder');
+		} else if (action === 'rename') {
+			this.renameName = name.split('/').pop() ?? name;
+			this.openDialog('rename-folder');
+		} else if (action === 'move') {
+			this.folderMoveTarget = roomOf(name);
+			this.openDialog('move-folder');
+		} else {
+			this.openDialog('delete-folder');
+		}
+	}
+
+	openNewFolder() {
+		this.menuFolder = null;
+		this.folderName = '';
+		this.openDialog('new-folder');
+	}
+
+	/** New folders are created inside the folder open in the sidebar; at the top level otherwise. */
+	createFolder() {
+		const leaf = normalizeFolder(this.folderName);
+		const parent = this.menuFolder ?? this.currentFolder;
+		const name = leaf && parent ? `${parent}/${leaf}` : leaf;
+		if (!name) {
+			this.toast.error('That name will not work', 'Use letters, numbers, dashes.');
+			return;
+		}
+		if (!this.rooms.some((r) => r.name === name)) this.pendingFolders = [...this.pendingFolders, name];
+		this.closeDialog('new-folder');
+		this.folderName = '';
+		this.menuFolder = null;
+		this.room = name;
+		this.toast.success('Folder ready', 'Drop or add a secret to keep it.');
+	}
+
+	openRenameFolder() {
+		const f = this.currentFolder;
+		if (!f) return;
+		this.menuFolder = f;
+		this.renameName = f.split('/').pop() ?? f;
+		this.openDialog('rename-folder');
+	}
+
+	/** Rename keeps the folder where it is; only the last path segment changes. */
+	async renameFolder() {
+		const from = this.targetFolder;
+		const leaf = normalizeFolder(this.renameName);
+		if (!from || !leaf) {
+			this.toast.error('That name will not work', 'Use letters, numbers, dashes.');
+			return;
+		}
+		const parent = roomOf(from);
+		const to = parent ? `${parent}/${leaf}` : leaf;
+		if (to === from) return this.closeDialog('rename-folder');
+		this.busy = 'folder';
+		try {
+			await this.relocateFolder(from, to, `Renamed to ${leaf}`);
+			this.closeDialog('rename-folder');
+		} finally {
+			this.busy = '';
+		}
+	}
+
+	/** Move a whole folder into another folder ('' = top level). */
+	async moveFolder(from: string, intoFolder: string) {
+		if (from === intoFolder || intoFolder.startsWith(from + '/')) {
+			this.toast.error('Cannot move a folder into itself');
+			return;
+		}
+		const leaf = from.split('/').pop() ?? from;
+		const to = intoFolder ? `${intoFolder}/${leaf}` : leaf;
+		if (to === from) return;
+		if (this.rooms.some((r) => r.name === to)) {
+			this.toast.error('A folder with that name is already there', 'Rename one of them first.');
+			return;
+		}
+		this.busy = 'folder';
+		try {
+			await this.relocateFolder(from, to, intoFolder ? `Moved into ${intoFolder}` : 'Moved to the top level');
+			this.closeDialog('move-folder');
+		} finally {
+			this.busy = '';
+		}
+	}
+
+	async moveFolderFromDialog() {
+		const from = this.targetFolder;
+		if (from) await this.moveFolder(from, this.folderMoveTarget);
+	}
+
+	/** Shared by rename and move: re-path every secret under `from` in one commit and keep UI state in step. */
+	private async relocateFolder(from: string, to: string, message: string) {
+		const moves = this.entriesIn(from).map((e) => ({ from: e.path, to: to + e.path.slice(from.length) }));
+		if (moves.length) await this.applyMoves(moves, message);
+		this.pendingFolders = this.pendingFolders.map((f) => (f === from || f.startsWith(from + '/') ? to + f.slice(from.length) : f));
+		if (this.room === from || this.room?.startsWith(from + '/')) this.room = to + this.room.slice(from.length);
+		this.menuFolder = null;
+	}
+
+	/** Delete the folder, moving its secrets up one level. */
+	async dissolveFolder() {
+		const from = this.targetFolder;
+		if (!from) return;
+		const parent = roomOf(from);
+		const moves = this.entriesIn(from).map((e) => ({ from: e.path, to: (parent ? parent + '/' : '') + e.path.slice(from.length + 1) }));
+		this.busy = 'folder';
+		try {
+			if (moves.length) await this.applyMoves(moves, parent ? `Moved into ${parent}` : 'Moved to the top level');
+			this.forgetFolder(from, parent);
+			this.closeDialog('delete-folder');
+		} finally {
+			this.busy = '';
+		}
+	}
+
+	/** Delete the folder and every secret in it. */
+	async deleteFolderContents() {
+		const from = this.targetFolder;
+		if (!from || !this.current) return;
+		const paths = this.entriesIn(from).map((e) => e.path);
+		this.busy = 'folder';
+		try {
+			if (paths.length) {
+				const n = await this.backend.removeSecrets(this.current.id, paths);
+				if (this.selectedPath && paths.includes(this.selectedPath)) this.clearSelection();
+				await this.loadEntries();
+				this.toast.success(`Deleted ${from}`, `${n} secret${n === 1 ? '' : 's'} removed. Rotate them if they were exposed.`);
+				this.refreshSync();
+			}
+			this.forgetFolder(from, roomOf(from));
+			this.closeDialog('delete-folder');
+		} catch (e) {
+			this.toast.error('Could not delete', asAppError(e).message);
+		} finally {
+			this.busy = '';
+		}
+	}
+
+	private forgetFolder(from: string, parent: string) {
+		this.pendingFolders = this.pendingFolders.filter((f) => f !== from && !f.startsWith(from + '/'));
+		if (this.room === from || this.room?.startsWith(from + '/')) this.room = parent || null;
+		this.menuFolder = null;
+	}
+
+	openMove() {
+		if (!this.selectedPath) return;
+		this.moveTarget = roomOf(this.selectedPath);
+		this.moveNewFolder = '';
+		this.openDialog('move');
+	}
+
+	async moveSelected() {
+		if (!this.selectedPath) return;
+		const typed = this.moveNewFolder.trim();
+		const target = typed ? normalizeFolder(typed) : this.moveTarget;
+		if (typed && !target) {
+			this.toast.error('That name will not work', 'Use letters, numbers, dashes. Nest with a slash, like team/staging.');
+			return;
+		}
+		this.busy = 'move';
+		try {
+			await this.moveSecret(this.selectedPath, target);
+			this.closeDialog('move');
+		} finally {
+			this.busy = '';
+		}
+	}
+
+	/** Move one secret into `folder` ('' = top level), keeping its file name. */
+	async moveSecret(path: string, folder: string) {
+		const to = (folder ? folder + '/' : '') + fileName(path);
+		if (to === path) return;
+		await this.applyMoves([{ from: path, to }], folder ? `Moved into ${folder}` : 'Moved to the top level');
+	}
+
+	private async applyMoves(moves: { from: string; to: string }[], message: string) {
+		if (!this.current) return;
+		try {
+			const n = await this.backend.moveSecrets(this.current.id, moves);
+			const selected = moves.find((m) => m.from === this.selectedPath);
+			await this.loadEntries();
+			// A pending folder that now has real secrets no longer needs to be remembered.
+			this.pendingFolders = this.pendingFolders.filter((f) => !this.entries.some((e) => roomOf(e.path) === f || roomOf(e.path).startsWith(f + '/')));
+			if (selected) await this.open(selected.to);
+			this.toast.success(n === 1 ? message : `${message} · ${n} secrets`);
+			this.refreshSync();
+		} catch (e) {
+			this.toast.error('Could not move', asAppError(e).message);
+			throw e;
+		}
+	}
+
+	// ---- in-app drag (secret row -> sidebar folder) ------------------------------------
+
+	rowClick(path: string) {
+		if (this._didDrag) {
+			this._didDrag = false;
+			return;
+		}
+		this.open(path);
+	}
+
+	rowPointerDown(e: PointerEvent, path: string) {
+		this.beginDrag(e, path, 'secret');
+	}
+
+	folderPointerDown(e: PointerEvent, name: string) {
+		if ((e.target as HTMLElement | null)?.closest?.('.more')) return;
+		this.beginDrag(e, name, 'folder');
+	}
+
+	private beginDrag(e: PointerEvent, path: string, kind: 'secret' | 'folder') {
+		if (e.button !== 0 || !this.current?.hasAccess) return;
+		this._dragStart = { x: e.clientX, y: e.clientY, path, kind };
+		window.addEventListener('pointermove', this._onRowMove);
+		window.addEventListener('pointerup', this._onRowUp, { once: true });
+	}
+
+	private _onRowMove = (e: PointerEvent) => {
+		const st = this._dragStart;
+		if (!st) return;
+		if (!this.moving && !this.movingFolder) {
+			if (Math.hypot(e.clientX - st.x, e.clientY - st.y) < 6) return;
+			if (st.kind === 'secret') this.moving = st.path;
+			else this.movingFolder = st.path;
+			this._didDrag = true;
+		}
+		this.ghostX = e.clientX;
+		this.ghostY = e.clientY;
+		const over = this.folderAtClient(e.clientX, e.clientY);
+		// A folder cannot be dropped on itself or inside itself.
+		this.moveTo = this.movingFolder && over !== null && (over === this.movingFolder || over.startsWith(this.movingFolder + '/')) ? null : over;
+	};
+
+	private _onRowUp = () => {
+		window.removeEventListener('pointermove', this._onRowMove);
+		const path = this.moving;
+		const folder = this.movingFolder;
+		const target = this.moveTo;
+		this._dragStart = null;
+		this.moving = null;
+		this.movingFolder = null;
+		this.moveTo = null;
+		if (target === null) return;
+		if (path && target !== roomOf(path)) this.moveSecret(path, target).catch(() => undefined);
+		if (folder && target !== roomOf(folder)) this.moveFolder(folder, target).catch(() => undefined);
+	};
+
+	folderClick(name: string) {
+		if (this._didDrag) {
+			this._didDrag = false;
+			return;
+		}
+		this.room = name;
+	}
+
+	/** Folder under a client-space point: '' for All secrets (top level), null when not over a folder. */
+	private folderAtClient(x: number, y: number): string | null {
+		try {
+			const root = this.root() as ShadowRoot | null;
+			const el = root?.elementFromPoint?.(x, y) as HTMLElement | null;
+			const item = el?.closest?.('[data-room]') as HTMLElement | null;
+			return item ? item.dataset.room ?? '' : null;
+		} catch {
+			return null;
 		}
 	}
 
