@@ -1,0 +1,30 @@
+{
+  "name": "chamber",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "icon": "tauri icon icon-source.svg -o src-tauri/icons"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.5",
+    "@fontsource/ibm-plex-sans": "^5.2.5",
+    "@melodicdev/components": "^3.1.0",
+    "@melodicdev/core": "^3.1.0",
+    "@tauri-apps/api": "^2.11.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/node": "^22.10.2",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.0",
+    "vite-plugin-static-copy": "^3.2.0"
+  }
+}

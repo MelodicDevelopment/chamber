@@ -1,0 +1,131 @@
+/* Chamber theme: obsidian + warm stone, flat brass accent, verdigris/ember status.
+   Overrides Melodic's dark preset on :root so applyTheme() keeps working. */
+:root,
+:root[data-theme='dark'],
+:root:not([data-theme='light']) {
+	--ml-font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--ml-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	--ml-color-background: #0e0d0b;
+	--ml-color-surface: #161412;
+	--ml-color-surface-raised: #1f1c18;
+	--ml-color-surface-overlay: #1f1c18;
+	--ml-color-surface-sunken: #121110;
+	--ml-color-input-bg: #161412;
+	--ml-color-input-disabled-bg: #121110;
+	--ml-card-footer-bg: #121110;
+
+	--ml-color-text: #eee6d8;
+	--ml-color-text-secondary: #d3c9b8;
+	--ml-color-text-muted: #b0a593;
+	--ml-color-text-subtle: #8a806f;
+	--ml-color-text-inverse: #1d1406;
+	--ml-color-text-link: #7fcba4;
+	--ml-color-text-link-hover: #9ddcbb;
+
+	--ml-color-border: rgba(255, 228, 190, 0.09);
+	--ml-color-border-strong: rgba(255, 228, 190, 0.18);
+	--ml-color-border-muted: rgba(255, 228, 190, 0.06);
+	--ml-color-border-focus: #d9a652;
+	--ml-color-focus-ring: #d9a652;
+
+	--ml-color-primary: #d9a652;
+	--ml-color-primary-hover: #e2b466;
+	--ml-color-primary-active: #c8933f;
+	--ml-color-primary-subtle: rgba(217, 166, 82, 0.14);
+	--ml-color-secondary: #b0a593;
+	--ml-color-secondary-hover: #d3c9b8;
+	--ml-color-secondary-active: #eee6d8;
+	--ml-color-secondary-subtle: #1f1c18;
+	--ml-color-success: #4fb58a;
+	--ml-color-success-hover: #62c69b;
+	--ml-color-success-subtle: rgba(79, 181, 138, 0.14);
+	--ml-color-warning: #e8785f;
+	--ml-color-warning-hover: #ef8d77;
+	--ml-color-warning-subtle: rgba(232, 120, 95, 0.12);
+	--ml-color-danger: #e8785f;
+	--ml-color-danger-hover: #ef8d77;
+	--ml-color-danger-subtle: rgba(232, 120, 95, 0.12);
+	--ml-color-info: #7fcba4;
+	--ml-color-info-subtle: rgba(79, 181, 138, 0.12);
+	--ml-color-toggle-off: #29251f;
+	--ml-color-toggle-off-hover: #332e27;
+	--ml-tooltip-bg: #eee6d8;
+	--ml-tooltip-text: #1d1406;
+
+	--ml-shadow-ring-color: rgba(224, 166, 75, 0.18);
+	--ml-shadow-ring-error-color: rgba(232, 120, 95, 0.2);
+	--ml-shadow-ring-success-color: rgba(79, 181, 138, 0.2);
+	--ml-shadow-ring-gray-color: rgba(255, 228, 190, 0.1);
+	--ml-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+	--ml-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+	--ml-shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+	--ml-shadow-lg: 0 12px 28px -8px rgba(0, 0, 0, 0.7);
+	--ml-shadow-xl: 0 18px 40px -18px rgba(0, 0, 0, 0.8);
+
+	--ml-badge-default-bg: #1f1c18;
+	--ml-badge-default-border: rgba(255, 228, 190, 0.12);
+	--ml-badge-default-text: #d3c9b8;
+	--ml-badge-primary-bg: rgba(217, 166, 82, 0.14);
+	--ml-badge-primary-border: rgba(217, 166, 82, 0.35);
+	--ml-badge-primary-text: #e2b466;
+	--ml-badge-success-bg: rgba(79, 181, 138, 0.14);
+	--ml-badge-success-border: rgba(79, 181, 138, 0.35);
+	--ml-badge-success-text: #7fcba4;
+	--ml-badge-warning-bg: rgba(232, 120, 95, 0.12);
+	--ml-badge-warning-border: rgba(232, 120, 95, 0.35);
+	--ml-badge-warning-text: #ef8d77;
+	--ml-badge-error-bg: rgba(232, 120, 95, 0.12);
+	--ml-badge-error-border: rgba(232, 120, 95, 0.35);
+	--ml-badge-error-text: #ef8d77;
+
+	--ml-radius: 8px;
+	--ml-radius-md: 8px;
+	--ml-radius-lg: 12px;
+	--ml-radius-xl: 16px;
+
+	/* Chamber-only tokens */
+	--ch-brass: #d9a652;
+	--ch-brass-ink: #1d1406;
+	--ch-verdigris: #4fb58a;
+	--ch-verdigris-light: #7fcba4;
+	--ch-ember: #e8785f;
+	--ch-key: #d9c08a;
+	--ch-string: #8fd3ae;
+	--ch-mask: #8a806f;
+	--ch-glow-a: rgba(224, 166, 75, 0.26);
+	--ch-glow-b: rgba(79, 181, 138, 0.14);
+	--ch-glow-c: rgba(140, 47, 57, 0.22);
+	--ch-grid: rgba(255, 228, 190, 0.045);
+	--ch-glass: rgba(14, 13, 11, 0.74);
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+	background: var(--ml-color-background);
+	color: var(--ml-color-text);
+	font-family: var(--ml-font-sans);
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	overflow: hidden;
+	user-select: none;
+}
+
+#app {
+	height: 100%;
+}
+
+ml-button {
+	--ml-button-border-radius: 8px;
+}
+ml-button[variant='primary'] {
+	--ml-button-color: var(--ch-brass-ink);
+	--ml-button-hover-color: var(--ch-brass-ink);
+	--ml-button-shadow: 0 4px 16px rgba(224, 166, 75, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+ml-badge {
+	--ml-badge-font-weight: 500;
+}
