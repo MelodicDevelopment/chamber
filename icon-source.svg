@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- macOS icon grid: artwork sits inside ~80% of the canvas, corners ≈ 22.5% of the tile. -->
   <defs>
     <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#F2CD86"/>
@@ -8,9 +9,12 @@
       <stop offset="0" stop-color="#1e1a15"/>
       <stop offset="1" stop-color="#0a0908"/>
     </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
   </defs>
-  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bg)"/>
-  <circle cx="256" cy="256" r="176" fill="none" stroke="url(#brass)" stroke-width="22"/>
-  <circle cx="256" cy="256" r="122" fill="none" stroke="url(#brass)" stroke-width="10" opacity="0.5"/>
-  <path d="M256 172a52 52 0 0 0-23.5 98.4L215 344h82l-17.5-73.6A52 52 0 0 0 256 172z" fill="url(#brass)"/>
+  <rect x="52" y="52" width="408" height="408" rx="92" fill="url(#bg)" filter="url(#shadow)"/>
+  <circle cx="256" cy="256" r="138" fill="none" stroke="url(#brass)" stroke-width="18"/>
+  <circle cx="256" cy="256" r="96" fill="none" stroke="url(#brass)" stroke-width="8" opacity="0.5"/>
+  <path d="M256 190a42 42 0 0 0-19 79.5L223 326h66l-14-56.5A42 42 0 0 0 256 190z" fill="url(#brass)"/>
 </svg>
