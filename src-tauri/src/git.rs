@@ -244,6 +244,8 @@ impl Git {
         Ok(())
     }
 
+    /// Not wired to the UI yet; the conflict dialog resolves per file instead. Kept for a future "discard merge" action.
+    #[allow(dead_code)]
     pub fn abort_merge(&self) -> Result<()> {
         if self.merge_in_progress() {
             self.run(&["merge", "--abort"])?;

@@ -106,10 +106,6 @@ impl Chamber {
         Ok(())
     }
 
-    pub fn has_access(&self, public_key: &str) -> Result<bool> {
-        Ok(self.recipients()?.iter().any(|r| r.public_key == public_key))
-    }
-
     pub fn add_recipient(&self, identity: &x25519::Identity, public_key: &str, label: &str) -> Result<()> {
         public_key.parse::<x25519::Recipient>().map_err(|e| AppError::msg(format!("not an age public key: {e}")))?;
         let mut list = self.recipients()?;

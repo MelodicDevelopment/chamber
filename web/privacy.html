@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="theme-color" content="#141210" />
+		<title>Privacy Policy — Chamber</title>
+		<meta name="description" content="Chamber's privacy policy: no accounts, no telemetry, no server. Your secrets are encrypted on your machine and only ciphertext reaches the git host you choose." />
+		<link rel="canonical" href="https://chamber.melodic.dev/privacy.html" />
+		<link rel="icon" type="image/svg+xml" href="/icon.svg" />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Chamber" />
+		<meta property="og:title" content="Privacy Policy — Chamber" />
+		<meta property="og:description" content="Chamber's privacy policy: no accounts, no telemetry, no server. Your secrets are encrypted on your machine and only ciphertext reaches the git host you choose." />
+		<meta property="og:url" content="https://chamber.melodic.dev/privacy.html" />
+		<link rel="stylesheet" href="/legal.css" />
+	</head>
+	<body>
+		<div class="wrap">
+			<header>
+				<a class="brand" href="/" aria-label="Chamber">
+					<svg class="brand__mark" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
+						<defs><linearGradient id="brass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2CD86" /><stop offset="1" stop-color="#B87C34" /></linearGradient></defs>
+						<circle cx="12" cy="12" r="10.5" fill="none" stroke="url(#brass)" stroke-width="1.6" />
+						<circle cx="12" cy="12" r="7.2" fill="none" stroke="url(#brass)" stroke-width="0.8" opacity="0.5" />
+						<path d="M12 6.8a3.1 3.1 0 0 0-1.4 5.87L9.6 17.2h4.8l-1-4.53A3.1 3.1 0 0 0 12 6.8z" fill="url(#brass)" />
+					</svg>
+					<span class="inscr">Chamber</span>
+				</a>
+				<nav class="nav-links">
+					<a class="nav-link" href="/terms.html">Terms</a>
+					<a class="nav-link" href="https://github.com/MelodicDevelopment/chamber">GitHub</a>
+				</nav>
+			</header>
+
+			<main>
+				<p class="eyebrow">Legal</p>
+				<h1>Privacy Policy</h1>
+				<p class="updated">Last updated September 6, 2026</p>
+
+				<section>
+					<h2>The short version</h2>
+					<p>
+						Chamber is a desktop application. It has no account system, no server operated by Melodic Development,
+						and no analytics or crash reporting. Everything it does happens on your computer and between your
+						computer and the git remote you configure. We never see your secrets, your keys, or your usage.
+					</p>
+				</section>
+
+				<section>
+					<h2>What Chamber stores on your computer</h2>
+					<ul>
+						<li><strong>Your age private key</strong> is stored in the operating system's keystore: Keychain on macOS, Credential Manager on Windows, Secret Service on Linux. It is never written to disk unencrypted. A recovery kit, if you save one, is an armored export of that key encrypted with a passphrase you choose.</li>
+						<li><strong>Local clones of your chambers</strong> live in the app's data directory. They contain only ciphertext, the keeper list, and an index of ciphertext hashes.</li>
+						<li><strong>App settings</strong> such as the list of chambers you have opened, folder order, and theme are kept in a JSON file in the app's data directory.</li>
+						<li><strong>Tokens you paste</strong> for HTTPS git hosts are stored in the same OS keystore as your key and handed to git through an askpass helper. They are not written to disk or passed on the command line.</li>
+					</ul>
+				</section>
+
+				<section>
+					<h2>What leaves your computer</h2>
+					<ul>
+						<li><strong>Ciphertext and metadata</strong> are pushed to the git remote you chose: <code>vault/**.age</code>, the keeper list of public keys and labels, and <code>.chamber/index.json</code>, which holds SHA-256 hashes and sizes of the encrypted files, plus who sealed each one and when. No plaintext and no plaintext hashes are ever committed.</li>
+						<li><strong>Git authentication</strong> goes directly between your machine and the host, using your SSH agent, git's own credential helpers, Git Credential Manager, or a token you pasted. Melodic Development is not in that path.</li>
+						<li><strong>Commit author details</strong> are the name and email in the app settings, or a name derived from your OS user and device name if you did not set one. They appear in the repository history like any git commit.</li>
+					</ul>
+					<p>Chamber makes no other network requests. It does not check for updates, load remote content, or send telemetry.</p>
+				</section>
+
+				<section>
+					<h2>Clipboard and screen</h2>
+					<p>
+						When you copy a secret value, Chamber clears the clipboard 30 seconds later. Revealed values are hidden
+						again after 30 seconds. Chamber cannot control clipboard history managers or screen recording tools you
+						run separately.
+					</p>
+				</section>
+
+				<section>
+					<h2>Third parties</h2>
+					<p>
+						Your git host is the only third party involved, and your relationship with it is governed by its own
+						terms and privacy policy. Because the host stores only ciphertext, it cannot read your secrets unless it
+						also holds a keeper's private key.
+					</p>
+				</section>
+
+				<section>
+					<h2>This website</h2>
+					<p>
+						chamber.melodic.dev is a static site. It sets no cookies and runs no analytics. Fonts are loaded from
+						Google Fonts, which may log the request per Google's privacy policy.
+					</p>
+				</section>
+
+				<section>
+					<h2>Children</h2>
+					<p>Chamber is not directed at children under 13 and does not knowingly collect information from anyone.</p>
+				</section>
+
+				<section>
+					<h2>Changes</h2>
+					<p>If this policy changes, the new version will be posted here with an updated date. The source code is public, so you can verify any claim on this page against what the app actually does.</p>
+				</section>
+
+				<section>
+					<h2>Contact</h2>
+					<p>Questions go to <a href="mailto:rickhopkins@melodic.dev">rickhopkins@melodic.dev</a> or the <a href="https://github.com/MelodicDevelopment/chamber/issues">issue tracker</a>.</p>
+				</section>
+			</main>
+
+			<footer>
+				<p><a href="/">Home</a> · <a href="/terms.html">Terms of Service</a> · <a href="https://github.com/MelodicDevelopment/chamber">GitHub</a></p>
+				<p>© 2026 Melodic Development.</p>
+			</footer>
+		</div>
+	</body>
+</html>

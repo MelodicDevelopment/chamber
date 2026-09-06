@@ -31,6 +31,10 @@ src/
   shared/        env parsing/masking, formatting, keyhole mark, theme.ts (appearance), pairing.ts (QR payload), qr-code + qr-scanner components
   styles/global.css   Chamber theme: light tokens on :root, dark on :root[data-theme='dark'] (linked with `melodic-styles`)
 vite-plugin-melodic-styles.ts   copied from kingdom; required so --ml-* tokens reach shadow roots
+web/                  static marketing site (chamber.melodic.dev), same shape as tapedeck/web; deployed by FTP on push
+scripts/sign-windows.mjs   Windows Authenticode via Azure Trusted Signing, called by bundle.windows.signCommand
+.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed draft release), deploy-website.yml
+docs/release.md       signing/notarization setup + per-release checklist
 ```
 
 Chamber repo layout (what gets committed): `vault/**.age`, `.chamber/recipients` (one `age1… label` per line), `.chamber/index.json` (ciphertext sha256/size/sealed_at/sealed_by — never plaintext hashes), `.gitignore`, `README.md`. Clones live under the app data dir, never in user folders.
@@ -78,4 +82,4 @@ Done: scaffold compiles and launches; welcome → create chamber → drop files 
 Folders: `+` opens New folder with the selected folder preselected as the location; right-click / ⋯ on a sidebar folder → New folder inside, Rename (leaf only), Move to…, Delete (keep secrets and move them up, or delete all). Drag rows or folders onto folders (pointer events, since Tauri's dragDropEnabled breaks HTML5 DnD); dragging a folder onto the top/bottom quarter of another folder row reorders it (and re-parents if the rows are not siblings). The New folder dialog has a location picker; clicking the open folder again returns to All secrets. Backend: `secrets_move` renames ciphertext only (no re-encrypt); `secrets_remove` deletes many in one commit. Dialogs are `<ml-dialog #name>` opened via DialogService, never `el.open()`.
 GCM guidance, light theme and QR pairing landed 2026-09-06 (branch feat/gcm-light-qr): Join page installs/rechecks GCM; Settings has Appearance; the locked panel, Join page and Settings show this device's QR; Keepers → Scan from another device reads it with the webcam and fills the add-keeper fields. Verified in the browser preview (screenshots, QR encode→decode roundtrip); the webcam scan and the GCM browser sign-in are not yet exercised on the desktop build.
 The sidebar | list | detail dividers drag to resize (`.resizer` handles, pointer events on window, min/max clamps, double-click resets); widths are `--sidebar-w`/`--list-w` on the page host, saved in localStorage.
-Not yet verified end to end on a real remote. Open items: CI/release workflow (tauri-action), Windows/Linux smoke test, encrypted filenames (optional), real-device test of QR scan + GCM sign-in.
+Not yet verified end to end on a real remote. Release pipeline exists but has not run yet (needs the Apple + Azure secrets copied in, see docs/release.md). Open items: Windows/Linux smoke test, encrypted filenames (optional), real-device test of QR scan + GCM sign-in.

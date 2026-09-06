@@ -32,6 +32,14 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Encrypted secrets, synced through git.",
+    "longDescription": "Keep secrets encrypted with age inside a git repository. Drop a file, it is sealed to every keeper's key and committed; one Sync button pushes and pulls.",
+    "copyright": "Copyright © 2026 Melodic Development",
+    "windows": {
+      "signCommand": "node ../scripts/sign-windows.mjs %1"
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

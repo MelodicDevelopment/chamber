@@ -63,7 +63,7 @@ impl AppConfig {
     }
 
     pub fn author(&self) -> (String, String) {
-        let name = self.author_name.clone().unwrap_or_else(|| whoami());
+        let name = self.author_name.clone().unwrap_or_else(whoami);
         let email = self.author_email.clone().unwrap_or_else(|| format!("{}@{}", slug(&name), slug(&self.device_name())));
         (name, email)
     }

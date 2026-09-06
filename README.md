@@ -18,3 +18,15 @@ Requires Rust (stable), Node 22+, and `git` on the PATH at runtime. Git Credenti
 - `src-tauri/` — Rust: age encryption (`chamber.rs`), keystore-backed identity (`identity.rs`), git wrapper (`git.rs`), auth ladder (`auth.rs`), Tauri commands (`commands.rs`).
 - `src/` — Melodic JS app: welcome, vault, and join pages; `services/backend.service.ts` is the only place that talks to Tauri.
 - A chamber repo holds `vault/**.age`, `.chamber/recipients`, and `.chamber/index.json`. Nothing in it is readable without a keeper's private key.
+
+## Website
+
+`web/` is the static marketing site at chamber.melodic.dev. Pushes to `main` that touch `web/` deploy it over FTP (`.github/workflows/deploy-website.yml`, secrets `FTP_HOST`, `FTP_USERNAME`, `FTP_PASSWORD`). `web/screenshot.png` is the hero image; retake it from the browser demo when the UI changes.
+
+## Release
+
+Push a `vX.Y.Z` tag and `.github/workflows/release.yml` builds signed, notarized installers for macOS, Windows, and Linux into a draft GitHub release. Setup and the per-release checklist are in [docs/release.md](docs/release.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
