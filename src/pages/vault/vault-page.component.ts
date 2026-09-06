@@ -89,6 +89,9 @@ export class VaultPage {
 	editText = '';
 	kitPassphrase = '';
 	theme: ThemeMode = savedTheme();
+	/** Which divider is being dragged, if any. Widths live on the host as CSS variables and in localStorage. */
+	resizing: 'sidebar' | 'list' | null = null;
+	private _resize: { kind: 'sidebar' | 'list'; startX: number; startW: number } | null = null;
 	/** True while the Scan dialog holds a live camera. */
 	scanning = false;
 
@@ -191,6 +194,7 @@ export class VaultPage {
 	// ---- lifecycle ----------------------------------------------------------
 
 	async onCreate() {
+		this.applyPaneWidths();
 		await this.refresh();
 		await this.listenForDrops();
 		window.addEventListener('keydown', this._onKey);
@@ -202,6 +206,8 @@ export class VaultPage {
 		window.removeEventListener('pointermove', this._onRowMove);
 		window.removeEventListener('pointerup', this._onRowUp);
 		window.removeEventListener('keydown', this._onKey);
+		window.removeEventListener('pointermove', this._onResizeMove);
+		window.removeEventListener('pointerup', this._onResizeUp);
 		if (this._tick) clearInterval(this._tick);
 		if (this._pollTimer) clearInterval(this._pollTimer);
 		for (const t of this._revealTimers.values()) clearTimeout(t.timer);
@@ -1012,6 +1018,78 @@ export class VaultPage {
 		} catch {
 			return null;
 		}
+	}
+
+	// ---- resizable panes ------------------------------------------------------------
+
+	private static readonly PANES = {
+		sidebar: { key: 'chamber.sidebarWidth', css: '--sidebar-w', def: 248, min: 200, max: 420 },
+		list: { key: 'chamber.listWidth', css: '--list-w', def: 372, min: 260, max: 640 },
+	} as const;
+
+	private host(): HTMLElement | null {
+		return (this as unknown as { elementRef?: HTMLElement }).elementRef ?? null;
+	}
+
+	private paneWidth(kind: 'sidebar' | 'list'): number {
+		const p = VaultPage.PANES[kind];
+		try {
+			const v = Number(localStorage.getItem(p.key));
+			if (v >= p.min && v <= p.max) return v;
+		} catch {
+			/* no storage */
+		}
+		return p.def;
+	}
+
+	private setPaneWidth(kind: 'sidebar' | 'list', w: number, persist: boolean) {
+		const p = VaultPage.PANES[kind];
+		const clamped = Math.round(Math.min(p.max, Math.max(p.min, w)));
+		this.host()?.style.setProperty(p.css, `${clamped}px`);
+		if (persist) {
+			try {
+				localStorage.setItem(p.key, String(clamped));
+			} catch {
+				/* ignore */
+			}
+		}
+		return clamped;
+	}
+
+	private applyPaneWidths() {
+		this.setPaneWidth('sidebar', this.paneWidth('sidebar'), false);
+		this.setPaneWidth('list', this.paneWidth('list'), false);
+	}
+
+	startResize(e: PointerEvent, kind: 'sidebar' | 'list') {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		const cur = parseFloat(this.host()?.style.getPropertyValue(VaultPage.PANES[kind].css) || '') || this.paneWidth(kind);
+		this._resize = { kind, startX: e.clientX, startW: cur };
+		this.resizing = kind;
+		this.host()?.classList.add('resizing');
+		window.addEventListener('pointermove', this._onResizeMove);
+		window.addEventListener('pointerup', this._onResizeUp, { once: true });
+	}
+
+	private _onResizeMove = (e: PointerEvent) => {
+		const r = this._resize;
+		if (!r) return;
+		this.setPaneWidth(r.kind, r.startW + (e.clientX - r.startX), false);
+	};
+
+	private _onResizeUp = (e: PointerEvent) => {
+		window.removeEventListener('pointermove', this._onResizeMove);
+		const r = this._resize;
+		this._resize = null;
+		this.resizing = null;
+		this.host()?.classList.remove('resizing');
+		if (r) this.setPaneWidth(r.kind, r.startW + (e.clientX - r.startX), true);
+	};
+
+	/** Double-click a divider to go back to the default width. */
+	resetResize(kind: 'sidebar' | 'list') {
+		this.setPaneWidth(kind, VaultPage.PANES[kind].def, true);
 	}
 
 	// ---- drag and drop ------------------------------------------------------------

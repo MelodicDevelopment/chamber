@@ -74,6 +74,7 @@ export function vaultPageTemplate(self: VaultPage) {
 				<span class="tile">${self.initials}</span>
 				<div class="grow"><div class="name">${self.status?.deviceName ?? ''}</div><div class="meta">${self.chambers.length} chamber${self.chambers.length === 1 ? '' : 's'} · ${self.status?.recoverySaved ? 'kit saved' : 'no recovery kit'}</div></div>
 			</div>
+			<div class="resizer ${self.resizing === 'sidebar' ? 'on' : ''}" title="Drag to resize" @pointerdown=${(ev: PointerEvent) => self.startResize(ev, 'sidebar')} @dblclick=${() => self.resetResize('sidebar')}></div>
 		</aside>
 
 		<main>
@@ -149,6 +150,7 @@ export function vaultPageTemplate(self: VaultPage) {
 										${conflicts.includes(`vault/${e.path}.age`) ? html`<span class="chip conflict"><ml-icon icon="warning" size="xs"></ml-icon>Conflict</span><span class="when" style="margin-left:0">${relativeTime(e.sealedAt)}</span>` : html`<span class="when">${relativeTime(e.sealedAt)}</span>`}
 									</div>`)}
 							</div>
+							<div class="resizer ${self.resizing === 'list' ? 'on' : ''}" title="Drag to resize" @pointerdown=${(ev: PointerEvent) => self.startResize(ev, 'list')} @dblclick=${() => self.resetResize('list')}></div>
 							<div class="list-foot">
 								<span>${self.entries.length} secret${self.entries.length === 1 ? '' : 's'} · ${self.rooms.length} folder${self.rooms.length === 1 ? '' : 's'}</span>
 								<span style="display:inline-flex; align-items:center; gap:6px"><ml-icon icon="upload-simple" size="xs"></ml-icon>Drop files, or drag to organize</span>

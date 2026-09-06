@@ -16,7 +16,7 @@ export function vaultPageStyles() {
 		.chip.btn:hover { border-color: var(--ml-color-border-strong); color: var(--ml-color-text); }
 
 		/* ---- sidebar ---- */
-		aside { position: relative; width: 248px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--ml-color-border);
+		aside { position: relative; width: var(--sidebar-w, 248px); flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--ml-color-border);
 			background: radial-gradient(ellipse 70% 40% at 10% 0%, var(--ch-glow-a) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 100% 8%, var(--ch-glow-b) 0%, transparent 60%), radial-gradient(ellipse 70% 40% at 50% 100%, var(--ch-glow-c) 0%, transparent 65%), var(--ch-sidebar); }
 		aside .grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(var(--ch-grid) 1px, transparent 1px), linear-gradient(90deg, var(--ch-grid) 1px, transparent 1px); background-size: 72px 26px; -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 0%, transparent 80%); mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 0%, transparent 80%); }
 		.titlebar { position: relative; height: 52px; display: flex; align-items: center; justify-content: flex-end; padding: 0 18px; flex-shrink: 0; }
@@ -81,6 +81,16 @@ export function vaultPageStyles() {
 		.menu-action .tile { width: 32px; height: 32px; background: linear-gradient(135deg, rgba(224, 166, 75, 0.16), rgba(79, 181, 138, 0.1)); color: var(--ml-color-text); }
 		.scrim { position: fixed; inset: 0; z-index: 65; }
 
+		/* ---- resizable dividers: a thin hit area straddling each border, brass while dragging ---- */
+		.resizer { position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; z-index: 5; cursor: col-resize; touch-action: none; }
+		.resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: var(--ch-brass); opacity: 0; transition: opacity 0.15s; }
+		.resizer:hover::after, .resizer.on::after { opacity: 1; }
+		aside .resizer { right: 0; } /* aside clips overflow, so keep its handle inside */
+		aside .resizer::after { left: 6px; }
+		:host(.resizing) { cursor: col-resize; user-select: none; }
+		:host(.resizing) * { pointer-events: none; }
+		:host(.resizing) .resizer { pointer-events: auto; }
+
 		/* ---- main ---- */
 		main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 		header { height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 20px; box-sizing: border-box; background: var(--ch-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--ml-color-border); }
@@ -93,7 +103,7 @@ export function vaultPageStyles() {
 		.card { height: 100%; display: flex; background: var(--ml-color-surface); border: 1px solid var(--ml-color-border); border-radius: 16px; box-shadow: var(--ml-shadow-xl); overflow: hidden; }
 
 		/* ---- list ---- */
-		.list { width: 372px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--ml-color-border); }
+		.list { position: relative; width: var(--list-w, 372px); flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--ml-color-border); }
 		.list-head { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 12px; border-bottom: 1px solid var(--ml-color-border); }
 		.list-head-top, .list-head-bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
 		.list-head .title { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -117,6 +127,7 @@ export function vaultPageStyles() {
 		.row .when { font-family: var(--ml-font-mono); font-size: 11px; color: var(--ml-color-text-subtle); margin-left: auto; }
 		.row .conflict { margin-left: auto; height: 22px; padding: 0 8px; font-size: 11px; color: var(--ch-ember); background: rgba(232, 120, 95, 0.1); border-color: rgba(232, 120, 95, 0.3); }
 		.list-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--ml-color-border); font-size: 12px; color: var(--ml-color-text-subtle); }
+		.list-foot > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 		.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px; text-align: center; color: var(--ml-color-text-muted); }
 		.empty .big { font-size: 16px; font-weight: 600; color: var(--ml-color-text); }
 
