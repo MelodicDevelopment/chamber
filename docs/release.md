@@ -6,6 +6,12 @@ Tapedeck uses: `tauri-action` on native runners, Apple notarization handled by t
 Windows Authenticode through Azure Trusted Signing via `scripts/sign-windows.mjs`. Linux is not
 signed; AppImage, .deb, and .rpm are uploaded as-is.
 
+After all three builds succeed, a `publish` job writes release notes from the commit subjects since
+the previous tag and publishes the draft. Nothing after the tag push is manual. Each build also
+emits updater archives signed with the Chamber minisign key and a `latest.json` manifest;
+installed copies (0.1.1 and later) check it on launch, download the new version in the background,
+and show a "Restart to update" pill in the sidebar. `/release` in Claude Code runs the whole thing.
+
 ## One-time setup
 
 All twelve secrets are set on the GitHub repository. They are the same Developer ID certificate
@@ -58,6 +64,14 @@ Melodic apps (see `coax/docs/windows-signing-setup.md` for how they were created
    installer. The script refuses to run unsigned unless `SKIP_WIN_SIGN=1` is set, so a missing
    secret fails the build instead of shipping an unsigned binary.
 
+### Updater signing key
+
+`TAURI_SIGNING_PRIVATE_KEY` is the minisign private key whose public half is in
+`src-tauri/tauri.conf.json` under `plugins.updater.pubkey`. Installed apps only accept updates
+signed by it, so losing it means every user reinstalls by hand. It lives in `~/.tauri/` on the
+build machine and is backed up in the secrets vault under `tokens/tauri/`.
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is set but empty; the key has no password.
+
 ### Linux
 
 Nothing to set up. The Ubuntu runner installs the WebKitGTK build dependencies and produces
@@ -76,9 +90,9 @@ AppImage, .deb, and .rpm. If distro signing ever matters, GPG-sign the .deb/.rpm
 
 3. Watch the **Release** workflow. Three jobs run in parallel; macOS takes the longest because
    of notarization (usually 5 to 15 minutes).
-4. When all three finish, open the **draft release** on GitHub, check the assets are there
-   (`Chamber_x.y.z_universal.dmg`, `Chamber_x.y.z_x64-setup.exe`, `Chamber_x.y.z_x64_en-US.msi`,
-   `Chamber_x.y.z_amd64.AppImage`, `.deb`, `.rpm`), write the notes, and publish.
+4. When all three finish, the `publish` job writes the notes and publishes. Check the release has
+   the installers (`.dmg`, `-setup.exe`, `.msi`, `.AppImage`, `.deb`, `.rpm`), `latest.json`, and
+   the `.sig` files. Edit the notes afterwards with `gh release edit vX.Y.Z --notes` if needed.
 5. The marketing site's download button links to `releases/latest`, so it updates on its own.
    The repository must be **public** for that link (and the README/LICENSE links on the site) to work for visitors.
 

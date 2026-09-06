@@ -1,6 +1,7 @@
 # Tag-triggered release: push a `vX.Y.Z` tag and this builds signed installers
-# on native runners for macOS (universal), Windows, and Linux, then uploads
-# them to a DRAFT GitHub Release for review before publishing.
+# on native runners for macOS (universal), Windows, and Linux, attaches them
+# to a draft GitHub Release, then (once all three succeed) writes release notes
+# from the commit log and publishes it.
 #
 # Required repository secrets:
 #   APPLE_CERTIFICATE             base64 of the Developer ID Application .p12
@@ -15,6 +16,8 @@
 #   TRUSTED_SIGNING_ENDPOINT      e.g. https://eus.codesigning.azure.net
 #   TRUSTED_SIGNING_ACCOUNT       Artifact Signing account name
 #   TRUSTED_SIGNING_PROFILE       certificate profile name
+#   TAURI_SIGNING_PRIVATE_KEY     minisign private key for updater artifacts (latest.json)
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  its password (empty for Chamber's key)
 #
 # See docs/release.md for the one-time setup and the per-release checklist.
 
@@ -88,6 +91,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+          # Updater artifact signing (tauri-plugin-updater). With these set,
+          # tauri-action also signs the updater archives and generates the
+          # latest.json manifest it uploads alongside the release assets.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
           # macOS signing + notarization, consumed directly by tauri-bundler.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -112,3 +121,56 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  # The three builds above attach their installers (and latest.json) to one
+  # draft. Only once every platform has succeeded do we write the notes and
+  # publish, so a release never goes live with an installer missing. Installed
+  # copies see the new version through latest.json on their next launch.
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Write release notes from the commits since the previous tag
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          prev=$(git tag --sort=-version:refname | grep -E '^v[0-9]' | grep -vx "$TAG" | head -n1)
+          {
+            echo "## What changed"
+            echo
+            if [ -n "$prev" ]; then
+              git log "$prev..$TAG" --no-merges --format='- %s' | grep -viE '^- (bump|release) ' || true
+            else
+              git log "$TAG" --no-merges --format='- %s'
+            fi
+            echo
+            echo "## Downloads"
+            echo
+            echo "- macOS: \`Chamber_${TAG#v}_universal.dmg\` (Apple silicon + Intel, signed and notarized)"
+            echo "- Windows: \`Chamber_${TAG#v}_x64-setup.exe\` or \`Chamber_${TAG#v}_x64_en-US.msi\` (signed)"
+            echo "- Linux: \`Chamber_${TAG#v}_amd64.AppImage\`, \`.deb\`, or \`.rpm\`"
+            echo
+            echo "Requires \`git\` on the PATH. Installed copies update themselves from this release on next launch."
+            if [ -n "$prev" ]; then
+              echo
+              echo "**Full changelog:** https://github.com/${{ github.repository }}/compare/$prev...$TAG"
+            fi
+          } > notes.md
+          cat notes.md
+
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release edit "$TAG" --repo "${{ github.repository }}" \
+            --title "Chamber ${TAG#v}" \
+            --notes-file notes.md \
+            --draft=false --latest
+          gh release view "$TAG" --repo "${{ github.repository }}" --json url,assets \
+            -q '.url, (.assets[].name)'

@@ -26,6 +26,8 @@ pub struct AppStatus {
     pub author_name: String,
     pub chambers: Vec<ChamberSummary>,
     pub current: Option<String>,
+    /// The running app's version, for the Settings dialog and update prompts.
+    pub app_version: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -93,6 +95,7 @@ pub fn app_status(state: State<AppState>) -> Result<AppStatus> {
     let cfg = state.config.lock().unwrap().clone();
     let chambers = cfg.chambers.iter().map(|r| summarize(&state, r, public_key.as_deref())).collect();
     Ok(AppStatus {
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
         identity_exists,
         public_key,
         recovery_saved: cfg.recovery_saved,

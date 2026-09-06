@@ -70,6 +70,10 @@ export function vaultPageTemplate(self: VaultPage) {
 				<div class="nav-item" @click=${() => self.openDialog('settings')}><ml-icon icon="gear" size="sm"></ml-icon><span class="label">Settings</span></div>
 			</nav>
 
+			${self.update ? html`
+				<button class="update-pill" @click=${() => self.restartToUpdate()} title="Chamber ${self.update.version} is downloaded. Click to install and relaunch.">
+					<ml-icon icon="arrow-circle-up" size="sm" format="bold"></ml-icon><span class="grow">Chamber ${self.update.version} ready</span><span class="go">Restart to update</span>
+				</button>` : ''}
 			<div class="user">
 				<span class="tile">${self.initials}</span>
 				<div class="grow"><div class="name">${self.status?.deviceName ?? ''}</div><div class="meta">${self.chambers.length} chamber${self.chambers.length === 1 ? '' : 's'} · ${self.status?.recoverySaved ? 'kit saved' : 'no recovery kit'}</div></div>
@@ -426,6 +430,13 @@ export function vaultPageTemplate(self: VaultPage) {
 				<div style="display:flex; gap:8px">
 					<ml-input type="password" placeholder="Passphrase (8+ characters)" .value=${self.kitPassphrase} @ml:input=${(e: CustomEvent) => (self.kitPassphrase = e.detail.value)}></ml-input>
 					<ml-button size="md" variant="outline" ?disabled=${self.kitPassphrase.length < 8} ?loading=${self.busy === 'kit'} @ml:click=${() => self.saveKit()}>Save kit…</ml-button>
+				</div>
+				<p style="margin-top: 8px"><b>Updates</b> · Chamber ${self.status?.appVersion ?? ''}</p>
+				<div style="display:flex; gap:8px; align-items:center">
+					${self.update
+						? html`<ml-button size="sm" variant="primary" @ml:click=${() => self.restartToUpdate()}>Restart to update to ${self.update.version}</ml-button>`
+						: html`<ml-button size="sm" variant="outline" ?loading=${self.checkingUpdate} @ml:click=${() => self.checkForUpdates()}>Check for updates</ml-button>`}
+					<span class="fine">${self.update ? 'Downloaded and verified.' : 'Chamber checks on launch and downloads updates in the background.'}</span>
 				</div>
 				${c ? html`
 					<p style="margin-top: 8px"><b>This chamber</b> · ${c.path}</p>

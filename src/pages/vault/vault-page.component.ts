@@ -4,6 +4,7 @@ import { RouterService } from '@melodicdev/core/routing';
 import { ToastService, DialogService } from '@melodicdev/components';
 import { vaultPageTemplate } from './vault-page.template';
 import { vaultPageStyles } from './vault-page.styles';
+import { UpdatesService, type StagedUpdate } from '../../services/updates.service';
 import { BackendService, asAppError, isDesktop, type AppStatus, type ChamberSummary, type Entry, type SecretContent, type SyncStatus, type LogEntry, type Recipient } from '../../services/backend.service';
 import { parseEnv, looksLikeEnv, mask, type EnvLine } from '../../shared/env';
 import { kindOf, roomOf, fileName, normalizeFolder } from '../../shared/format';
@@ -25,6 +26,7 @@ export class VaultPage {
 	@Service(RouterService) readonly router!: RouterService;
 	@Service(ToastService) private readonly toast!: ToastService;
 	@Service(DialogService) private readonly dialogs!: DialogService;
+	@Service(UpdatesService) private readonly updates!: UpdatesService;
 
 	status: AppStatus | null = null;
 	chambers: ChamberSummary[] = [];
@@ -47,6 +49,11 @@ export class VaultPage {
 	viewingRev: string | null = null;
 	history: LogEntry[] = [];
 	keepers: Recipient[] = [];
+
+	/** A newer version, downloaded and waiting for a restart. */
+	update: StagedUpdate | null = null;
+	checkingUpdate = false;
+	updateChecked = false;
 
 	dragging = false;
 	dragCount = 0;
@@ -199,6 +206,30 @@ export class VaultPage {
 		await this.listenForDrops();
 		window.addEventListener('keydown', this._onKey);
 		this._pollTimer = window.setInterval(() => this.refreshSync(), 60_000);
+		// Silent auto-update: download in the background; the sidebar pill appears once it is staged.
+		this.updates.stage().then((u) => (this.update = u)).catch(() => undefined);
+	}
+
+	// ---- updates --------------------------------------------------------------
+
+	/** Manual check from Settings. */
+	async checkForUpdates() {
+		this.checkingUpdate = true;
+		try {
+			this.update = await this.updates.stage();
+			this.updateChecked = true;
+			if (!this.update) this.toast.success('You are up to date', `Chamber ${this.status?.appVersion ?? ''}`);
+		} finally {
+			this.checkingUpdate = false;
+		}
+	}
+
+	async restartToUpdate() {
+		try {
+			await this.updates.restart();
+		} catch (e) {
+			this.toast.error('Could not install the update', asAppError(e).message);
+		}
 	}
 
 	onDestroy() {

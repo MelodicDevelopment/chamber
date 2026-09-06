@@ -27,8 +27,15 @@
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'"
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkyNTBBREE2MTIwQjNGMkQKUldRdFB3c1NwcTFRa294NFRub0xhVFZXZmxNZDZJYzRKWThlWU8veHl3OWhRcmorN2FDZmhxSmgK",
+      "endpoints": ["https://github.com/MelodicDevelopment/chamber/releases/latest/download/latest.json"]
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Encrypted secrets, synced through git.",

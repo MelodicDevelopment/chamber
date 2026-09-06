@@ -39,6 +39,10 @@ export function vaultPageStyles() {
 		.nav-item.pending .label { font-style: italic; }
 		.nav-item.folder { user-select: none; -webkit-user-select: none; touch-action: none; }
 		.nav-item.lifting { opacity: 0.45; }
+		.update-pill { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px; padding: 9px 12px; border: 1px solid var(--ch-brass); border-radius: 8px; background: var(--ch-brass-glow); color: var(--ml-color-text); font: inherit; font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; }
+		.update-pill:hover { background: var(--ml-color-primary-subtle); }
+		.update-pill ml-icon { color: var(--ch-brass); }
+		.update-pill .go { font-size: 11px; color: var(--ch-brass); white-space: nowrap; }
 		.nav-item.drop-before::after, .nav-item.drop-after::after { content: ''; position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 2px; background: var(--ch-brass); box-shadow: 0 0 0 3px rgba(224, 166, 75, 0.18); pointer-events: none; }
 		.nav-item.drop-before::after { top: -2px; }
 		.nav-item.drop-after::after { bottom: -2px; }

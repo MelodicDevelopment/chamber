@@ -42,6 +42,7 @@ export interface AppStatus {
 	authorName: string;
 	chambers: ChamberSummary[];
 	current: string | null;
+	appVersion: string;
 }
 export interface Entry {
 	path: string;
@@ -179,7 +180,7 @@ class DemoBackend {
 			case 'app_status':
 				return {
 					identityExists: true, publicKey: 'age1demo000000000000000000000000000000000000000000000000000000', recoverySaved: this.recoverySaved,
-					deviceName: 'this browser', gitAvailable: true, gcmAvailable: false, gcmInstall: DEMO_GCM, authorName: 'You', current: 'demo',
+					deviceName: 'this browser', appVersion: '0.0.0-demo', gitAvailable: true, gcmAvailable: false, gcmInstall: DEMO_GCM, authorName: 'You', current: 'demo',
 					chambers: [{ id: 'demo', name: 'Personal', path: '/demo', remote: 'git@github.com:you/secrets.git', createdAt: now, folders: this.folders, hasAccess: true, keepers: 1, sync: { branch: 'main', remote: 'git@github.com:you/secrets.git', ahead: 0, behind: 0, dirty: false, mergeInProgress: false, conflicts: [] } }],
 				} as T;
 			case 'identity_public_key': return 'age1demo000000000000000000000000000000000000000000000000000000' as T;

@@ -11,6 +11,8 @@
     "dialog:default",
     "opener:default",
     "clipboard-manager:allow-write-text",
-    "clipboard-manager:allow-clear"
+    "clipboard-manager:allow-clear",
+    "updater:default",
+    "process:allow-restart"
   ]
 }
