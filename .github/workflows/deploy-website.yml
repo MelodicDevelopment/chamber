@@ -1,0 +1,34 @@
+# Deploy web/ to the Railway service that serves chamber.melodic.dev whenever
+# the site changes on main. Equivalent to running `railway up` from web/.
+#
+# Required repository secret:
+#   RAILWAY_TOKEN   a project token for the "chamber" Railway project
+#                   (Railway dashboard → project → Settings → Tokens)
+
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-website
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy
+        working-directory: web
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service chamber --environment production --ci

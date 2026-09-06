@@ -31,9 +31,9 @@ src/
   shared/        env parsing/masking, formatting, keyhole mark, theme.ts (appearance), pairing.ts (QR payload), qr-code + qr-scanner components
   styles/global.css   Chamber theme: light tokens on :root, dark on :root[data-theme='dark'] (linked with `melodic-styles`)
 vite-plugin-melodic-styles.ts   copied from kingdom; required so --ml-* tokens reach shadow roots
-web/                  static marketing site (chamber.melodic.dev): nginx Dockerfile on Railway (root dir web/), docker-compose for local, og.png/sitemap/robots/404 for SEO
+web/                  static marketing site (chamber.melodic.dev): nginx Dockerfile on Railway (project+service `chamber`, DNS at GoDaddy), docker-compose for local, og.png/sitemap/robots/404 for SEO. railway.toml is the deprecated CaC format; the migrate tool drops watchPatterns, so keep it until Railway forces the move (2026-12-01).
 scripts/sign-windows.mjs   Windows Authenticode via Azure Trusted Signing, called by bundle.windows.signCommand
-.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed draft release)
+.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed draft release), deploy-website.yml (web/ → Railway via RAILWAY_TOKEN)
 docs/release.md       signing/notarization setup + per-release checklist
 ```
 

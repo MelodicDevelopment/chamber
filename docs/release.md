@@ -97,3 +97,18 @@ SKIP_WIN_SIGN=1 npm run desktop:build
 
 Produces installers under `src-tauri/target/release/bundle/` for the host platform only. On macOS
 the app is ad-hoc signed and will need right-click → Open the first time.
+
+## Website
+
+The site deploys separately from the app. `web/` is built from its Dockerfile on Railway
+(project `chamber`, service `chamber`, environment `production`).
+
+- Public URL: https://chamber-production-a2cf.up.railway.app until DNS is in place, then
+  https://chamber.melodic.dev.
+- DNS (GoDaddy, zone `melodic.dev`): `CNAME chamber → cx2icivi.up.railway.app` and
+  `TXT _railway-verify.chamber → railway-verify=<from railway domain status>`.
+  `railway domain status chamber.melodic.dev` from `web/` reports when the certificate is issued.
+- Automatic deploys: `.github/workflows/deploy-website.yml` runs `railway up` on pushes to
+  `main` that touch `web/`. It needs a `RAILWAY_TOKEN` repository secret (Railway dashboard →
+  chamber → Settings → Tokens → project token).
+- Manual deploy: `cd web && railway up`.
