@@ -8,8 +8,10 @@ signed; AppImage, .deb, and .rpm are uploaded as-is.
 
 ## One-time setup
 
-All of the credentials below already exist for Tapedeck and Coax. Nothing new needs to be bought
-or validated; the work is copying secrets into this repository.
+All twelve secrets are set on the GitHub repository. They are the same Developer ID certificate
+and Azure Trusted Signing account the other Melodic apps use, so nothing new needs to be bought or
+validated. If a value rotates, re-set it with `gh secret set NAME --repo MelodicDevelopment/chamber`.
+The Developer ID certificate expires 2027-02-01.
 
 ### macOS (sign + notarize)
 
@@ -105,9 +107,9 @@ The site deploys separately from the app. `web/` is built from its Dockerfile on
 
 - Public URL: https://chamber-production-a2cf.up.railway.app until DNS is in place, then
   https://chamber.melodic.dev.
-- DNS (GoDaddy, zone `melodic.dev`): `CNAME chamber → cx2icivi.up.railway.app` and
-  `TXT _railway-verify.chamber → railway-verify=<from railway domain status>`.
-  `railway domain status chamber.melodic.dev` from `web/` reports when the certificate is issued.
+- DNS: a `CNAME chamber` record pointing at the Railway target plus a `TXT _railway-verify.chamber`
+  record. `railway domain status chamber.melodic.dev` from `web/` prints both values and reports
+  when the certificate is issued.
 - Automatic deploys: `.github/workflows/deploy-website.yml` runs `railway up` on pushes to
   `main` that touch `web/`. It needs a `RAILWAY_TOKEN` repository secret (Railway dashboard →
   chamber → Settings → Tokens → project token).

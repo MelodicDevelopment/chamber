@@ -2,7 +2,7 @@
 
 Cross-platform desktop app (Tauri 2 + Melodic JS/Components 3.1) for storing secrets encrypted with age inside a git repository. Free and simple by design: drop a file, it is sealed and committed; one Sync button pushes and pulls; any git host works.
 
-Started 2026-09-04 as a product version of Rick's personal `~/.secrets` vault (age + git + Keychain). "Start small" is the mandate; multi-vault ("chambers") and multi-keeper sharing are in the data model from day one.
+Started 2026-09-04 as a product version of a personal shell-script vault (age + git + Keychain). "Start small" is the mandate; multi-vault ("chambers") and multi-keeper sharing are in the data model from day one.
 
 ## Vocabulary
 
