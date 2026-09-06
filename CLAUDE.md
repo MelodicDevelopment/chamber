@@ -62,9 +62,7 @@ Chamber repo layout (what gets committed): `vault/**.age`, `.chamber/recipients`
 
 ## Design
 
-Two canvases (Claude Design artifacts). Chamber is the chosen direction:
-- Chamber: https://claude.ai/code/artifact/b1e1d113-1e49-4b4c-8239-1456cceb47c5 — obsidian + warm stone, flat brass `#D9A652` as the single accent (buttons, selection rails, inscriptions), verdigris `#4FB58A` for clean/revealed, ember `#E8785F` for conflicts/attention. IBM Plex Sans everywhere (no serif), IBM Plex Mono for keys/values. Keyhole mark + "CHAMBER" in spaced caps. Secret viewer styled like a code window (amber keys, green revealed values, dim masks).
-- Melodic Vault (earlier, melodic.dev-branded alternative, kept for reference): https://claude.ai/code/artifact/4cfbd8e4-64d8-4d35-98f7-0d61ba2b168a
+Obsidian + warm stone, flat brass `#D9A652` as the single accent (buttons, selection rails, inscriptions), verdigris `#4FB58A` for clean/revealed, ember `#E8785F` for conflicts/attention. IBM Plex Sans everywhere (no serif), IBM Plex Mono for keys/values. Keyhole mark + "CHAMBER" in spaced caps. Secret viewer styled like a code window (amber keys, green revealed values, dim masks). Light theme is the same story on parchment.
 
 ## Run
 
