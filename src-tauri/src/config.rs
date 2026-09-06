@@ -12,6 +12,10 @@ pub struct ChamberRef {
     pub path: PathBuf,
     pub remote: Option<String>,
     pub created_at: String,
+    /// Sidebar folder order chosen by the user. Also keeps folders that hold no secrets yet
+    /// (git cannot store an empty directory). Paths are relative to `vault/`, like `team/staging`.
+    #[serde(default)]
+    pub folders: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

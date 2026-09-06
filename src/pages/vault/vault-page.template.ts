@@ -60,7 +60,7 @@ export function vaultPageTemplate(self: VaultPage) {
 				</div>
 				${self.rooms.length === 0 ? html`<div class="nav-hint">No folders yet. Make one, or drag a folder from your computer.</div>` : ''}
 				${self.rooms.map((r) => html`
-					<div class="nav-item folder ${self.room === r.name ? 'active' : ''} ${(self.dragging && self.dropRoom === r.name) || ((self.moving || self.movingFolder) && self.moveTo === r.name) ? 'target' : ''} ${r.count === 0 ? 'pending' : ''} ${self.movingFolder === r.name || (self.movingFolder && r.name.startsWith(self.movingFolder + '/')) ? 'lifting' : ''} ${self.folderMenu?.name === r.name ? 'menu-on' : ''}" style="padding-left: ${12 + r.depth * 14}px" data-room=${r.name} title=${r.name}
+					<div class="nav-item folder ${self.room === r.name ? 'active' : ''} ${(self.dragging && self.dropRoom === r.name) || ((self.moving || self.movingFolder) && self.moveTo === r.name && self.movePos === 'into') ? 'target' : ''} ${self.movingFolder && self.moveTo === r.name && self.movePos !== 'into' ? `drop-${self.movePos}` : ''} ${r.count === 0 ? 'pending' : ''} ${self.movingFolder === r.name || (self.movingFolder && r.name.startsWith(self.movingFolder + '/')) ? 'lifting' : ''} ${self.folderMenu?.name === r.name ? 'menu-on' : ''}" style="padding-left: ${12 + r.depth * 14}px" data-room=${r.name} title=${r.name}
 						@click=${() => self.folderClick(r.name)} @pointerdown=${(ev: PointerEvent) => self.folderPointerDown(ev, r.name)} @contextmenu=${(ev: MouseEvent) => self.openFolderMenu(ev, r.name)}>
 						<ml-icon icon=${self.room === r.name ? 'folder-open' : 'folder'} size="sm"></ml-icon><span class="label">${r.label}</span><span class="count">${r.count}</span>
 						<span class="more" title="Folder options" @click=${(ev: MouseEvent) => self.openFolderMenu(ev, r.name)}><ml-icon icon="dots-three" size="sm" format="bold"></ml-icon></span>
@@ -219,7 +219,7 @@ export function vaultPageTemplate(self: VaultPage) {
 		${self.moving || self.movingFolder ? html`
 			<div class="ghost" style="left: ${self.ghostX + 14}px; top: ${self.ghostY + 10}px">
 				<ml-icon icon=${self.moving ? iconFor(kindOf(self.moving)) : 'folder'} size="sm"></ml-icon><span>${fileName(self.moving ?? self.movingFolder ?? '')}</span>
-				<span class="to">${self.moveTo === null ? 'Drop on a folder' : self.moveTo === '' ? '→ top level' : `→ ${self.moveTo}`}</span>
+				<span class="to">${self.moveTo === null ? (self.movingFolder ? 'Drop between folders to reorder, on one to nest' : 'Drop on a folder') : self.movePos === 'before' ? `↑ before ${fileName(self.moveTo)}` : self.movePos === 'after' ? `↓ after ${fileName(self.moveTo)}` : self.moveTo === '' ? '→ top level' : `→ ${self.moveTo}`}</span>
 			</div>` : ''}
 
 		${self.folderMenu ? html`
@@ -263,10 +263,16 @@ export function vaultPageTemplate(self: VaultPage) {
 		<ml-dialog #new-folder id="new-folder" size="sm">
 			<h3 slot="dialog-header">New folder</h3>
 			<div class="dlg">
-				<p>${self.targetFolder ? html`Goes inside <b>${self.targetFolder}</b>. Pick <i>All secrets</i> first to make a top-level folder.` : 'A top-level folder. Select a folder first to nest inside it.'} A folder stays only once it holds a secret.</p>
-				<ml-input label="Name" placeholder=${self.targetFolder ? 'staging' : 'production'} .value=${self.folderName} @ml:input=${(e: CustomEvent) => (self.folderName = e.detail.value)} @keydown=${(e: KeyboardEvent) => e.key === 'Enter' && self.createFolder()}></ml-input>
+				<ml-input label="Name" placeholder=${self.newFolderParent ? 'staging' : 'production'} .value=${self.folderName} @ml:input=${(e: CustomEvent) => (self.folderName = e.detail.value)} @keydown=${(e: KeyboardEvent) => e.key === 'Enter' && self.createFolder()}></ml-input>
+				<div class="pick-label">Where</div>
+				<div class="pick">
+					<div class="pick-item ${self.newFolderParent === '' ? 'on' : ''}" @click=${() => (self.newFolderParent = '')}><ml-icon icon="lock" size="sm"></ml-icon><span class="grow">Top level</span></div>
+					${self.rooms.map((r) => html`
+						<div class="pick-item ${self.newFolderParent === r.name ? 'on' : ''}" style="padding-left: ${10 + r.depth * 14}px" @click=${() => (self.newFolderParent = r.name)}><ml-icon icon="folder" size="sm"></ml-icon><span class="grow">${r.label}</span></div>`)}
+				</div>
+				<p>${self.newFolderPath ? html`Will be <b>${self.newFolderPath}</b>.` : ''} Drag folders in the sidebar to reorder or nest them later.</p>
 			</div>
-			<div slot="dialog-footer"><ml-button variant="outline" @ml:click=${() => self.closeDialog('new-folder')}>Cancel</ml-button><ml-button variant="primary" ?disabled=${!self.folderName.trim()} @ml:click=${() => self.createFolder()}>Create</ml-button></div>
+			<div slot="dialog-footer"><ml-button variant="outline" @ml:click=${() => self.closeDialog('new-folder')}>Cancel</ml-button><ml-button variant="primary" ?disabled=${!self.newFolderPath} @ml:click=${() => self.createFolder()}>Create</ml-button></div>
 		</ml-dialog>
 
 		<ml-dialog #rename-folder id="rename-folder" size="sm">

@@ -39,6 +39,9 @@ export function vaultPageStyles() {
 		.nav-item.pending .label { font-style: italic; }
 		.nav-item.folder { user-select: none; -webkit-user-select: none; touch-action: none; }
 		.nav-item.lifting { opacity: 0.45; }
+		.nav-item.drop-before::after, .nav-item.drop-after::after { content: ''; position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 2px; background: var(--ch-brass); box-shadow: 0 0 0 3px rgba(224, 166, 75, 0.18); pointer-events: none; }
+		.nav-item.drop-before::after { top: -2px; }
+		.nav-item.drop-after::after { bottom: -2px; }
 		.nav-item .more { display: none; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px -6px -4px 0; border-radius: 6px; color: var(--ml-color-text-subtle); }
 		.nav-item .more:hover { background: rgba(255, 228, 190, 0.08); color: var(--ml-color-text); }
 		.nav-item.folder:hover .more, .nav-item.menu-on .more { display: inline-flex; }
@@ -179,6 +182,7 @@ export function vaultPageStyles() {
 		.foot-btns { display: flex; gap: 8px; justify-content: flex-end; }
 		[slot="dialog-footer"] { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 100%; box-sizing: border-box; }
 		[slot="dialog-footer"] ml-button { flex-shrink: 0; }
+		.pick-label { font-family: var(--ml-font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ml-color-text-subtle); }
 		.pick { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow: auto; padding: 4px; border: 1px solid var(--ml-color-border); border-radius: 10px; background: var(--ml-color-background); }
 		.pick-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; color: var(--ml-color-text-muted); }
 		.pick-item:hover { background: rgba(255, 228, 190, 0.05); color: var(--ml-color-text); }

@@ -126,7 +126,7 @@ pub fn recovery_mark_saved(state: State<AppState>) -> Result<()> {
 }
 
 fn register(state: &State<AppState>, name: &str, path: PathBuf, remote: Option<String>) -> Result<ChamberRef> {
-    let r = ChamberRef { id: uuid::Uuid::new_v4().to_string(), name: name.to_string(), path, remote, created_at: chrono::Utc::now().to_rfc3339() };
+    let r = ChamberRef { id: uuid::Uuid::new_v4().to_string(), name: name.to_string(), path, remote, created_at: chrono::Utc::now().to_rfc3339(), folders: Vec::new() };
     let mut cfg = state.config.lock().unwrap();
     cfg.chambers.push(r.clone());
     cfg.current = Some(r.id.clone());
@@ -184,6 +184,15 @@ pub fn chamber_select(state: State<AppState>, id: String) -> Result<()> {
         return Err(AppError::msg("unknown chamber"));
     }
     cfg.current = Some(id);
+    cfg.save(&state.config_path)
+}
+
+/// Save the sidebar folder order (and any empty folders) for a chamber. App-local, never committed.
+#[tauri::command]
+pub fn chamber_set_folders(state: State<AppState>, id: String, folders: Vec<String>) -> Result<()> {
+    let mut cfg = state.config.lock().unwrap();
+    let r = cfg.chambers.iter_mut().find(|c| c.id == id).ok_or_else(|| AppError::msg("unknown chamber"))?;
+    r.folders = folders.into_iter().map(|f| f.trim_matches('/').to_string()).filter(|f| !f.is_empty()).collect();
     cfg.save(&state.config_path)
 }
 

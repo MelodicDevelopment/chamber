@@ -24,6 +24,8 @@ export interface ChamberSummary {
 	path: string;
 	remote: string | null;
 	createdAt: string;
+	/** Sidebar folder order; also remembers folders that hold no secrets yet. */
+	folders: string[];
 	hasAccess: boolean;
 	keepers: number;
 	sync: SyncStatus | null;
@@ -116,6 +118,7 @@ export class BackendService {
 	createChamber(name: string, remote?: string) { return this.call<ChamberSummary>('chamber_create', { name, remote: remote ?? null }); }
 	joinChamber(url: string, name?: string) { return this.call<ChamberSummary>('chamber_join', { url, name: name ?? null }); }
 	selectChamber(id: string) { return this.call<void>('chamber_select', { id }); }
+	setFolders(id: string, folders: string[]) { return this.call<void>('chamber_set_folders', { id, folders }); }
 	forgetChamber(id: string) { return this.call<void>('chamber_forget', { id }); }
 	listSecrets(chamberId: string) { return this.call<Entry[]>('secrets_list', { chamberId }); }
 	openSecret(chamberId: string, path: string) { return this.call<SecretContent>('secret_open', { chamberId, path }); }
@@ -147,6 +150,7 @@ export class BackendService {
 
 /** Browser-only stand-in so `npm run dev` shows something. Nothing persists. */
 class DemoBackend {
+	private folders: string[] = [];
 	private secrets = new Map<string, string>([
 		['foundry/railway.env', 'NODE_ENV=production\nDATABASE_URL=postgres://foundry:s3cret@db.example.internal:5432/foundry\nREDIS_URL=redis://cache.example.internal:6379\nSTRIPE_SECRET_KEY=sk_test_0000000000000000\nAPP_URL=https://foundry.example.com\n'],
 		['foundry/stripe.env', 'STRIPE_SECRET_KEY=sk_test_0000000000000000\nSTRIPE_WEBHOOK_SECRET=whsec_000000000000\n'],
@@ -163,7 +167,7 @@ class DemoBackend {
 				return {
 					identityExists: true, publicKey: 'age1demo000000000000000000000000000000000000000000000000000000', recoverySaved: this.recoverySaved,
 					deviceName: 'this browser', gitAvailable: true, gcmAvailable: false, current: 'demo',
-					chambers: [{ id: 'demo', name: 'Personal', path: '/demo', remote: 'git@github.com:you/secrets.git', createdAt: now, hasAccess: true, keepers: 1, sync: { branch: 'main', remote: 'git@github.com:you/secrets.git', ahead: 0, behind: 0, dirty: false, mergeInProgress: false, conflicts: [] } }],
+					chambers: [{ id: 'demo', name: 'Personal', path: '/demo', remote: 'git@github.com:you/secrets.git', createdAt: now, folders: this.folders, hasAccess: true, keepers: 1, sync: { branch: 'main', remote: 'git@github.com:you/secrets.git', ahead: 0, behind: 0, dirty: false, mergeInProgress: false, conflicts: [] } }],
 				} as T;
 			case 'identity_public_key': return 'age1demo000000000000000000000000000000000000000000000000000000' as T;
 			case 'recovery_kit_export': return '-----BEGIN AGE ENCRYPTED FILE-----\n(demo)\n-----END AGE ENCRYPTED FILE-----\n' as T;
@@ -177,6 +181,9 @@ class DemoBackend {
 			case 'secret_seal_text': this.secrets.set(args.path as string, args.text as string); this.sealedAt.set(args.path as string, now); return true as T;
 			case 'secret_remove': this.secrets.delete(args.path as string); return undefined as T;
 			case 'secrets_remove': { let n = 0; for (const p of args.paths as string[]) if (this.secrets.delete(p)) n++; return n as T; }
+			case 'chamber_set_folders':
+				this.folders = args.folders as string[];
+				return undefined as T;
 			case 'secrets_move': {
 				const moves = args.moves as { from: string; to: string }[];
 				for (const m of moves) {

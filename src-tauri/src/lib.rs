@@ -52,6 +52,7 @@ pub fn run() {
             commands::chamber_create,
             commands::chamber_join,
             commands::chamber_select,
+            commands::chamber_set_folders,
             commands::chamber_forget,
             commands::secrets_list,
             commands::secret_open,

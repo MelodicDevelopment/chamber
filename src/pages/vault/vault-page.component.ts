@@ -50,11 +50,18 @@ export class VaultPage {
 	dragCount = 0;
 	dropRoom = '';
 
-	/** Folders the user created that have no secrets yet (git cannot store them, so they live here until used). */
-	pendingFolders: string[] = [];
+	/**
+	 * Sidebar folder order, saved per chamber in the app config (not in the repo). Also remembers folders
+	 * the user created that hold no secrets yet, since git cannot store an empty directory.
+	 */
+	folders: string[] = [];
 	/** In-app drag of a secret row (or a sidebar folder) onto a sidebar folder. */
 	moving: string | null = null;
 	movingFolder: string | null = null;
+	/** Where a dragged folder lands relative to `moveTo`: inside it, or as a sibling before/after it. */
+	movePos: 'into' | 'before' | 'after' = 'into';
+	/** Parent picked in the New folder dialog ('' = top level). */
+	newFolderParent = '';
 	/** Right-click / "⋯" menu on a sidebar folder. */
 	folderMenu: { name: string; x: number; y: number } | null = null;
 	/** Folder the folder dialogs act on (from the menu), falling back to the one open in the list. */
@@ -88,7 +95,10 @@ export class VaultPage {
 
 	// ---- derived ------------------------------------------------------------
 
-	/** Every folder (including ancestors of nested ones) with the number of secrets inside it, nested ones included. */
+	/**
+	 * Every folder (including ancestors of nested ones) with the number of secrets inside it, nested ones included.
+	 * Depth-first; siblings follow the user's order in `folders`, with anything unordered alphabetical after.
+	 */
 	get rooms(): { name: string; label: string; depth: number; count: number }[] {
 		const m = new Map<string, number>();
 		const touch = (folder: string, n: number) => {
@@ -102,10 +112,18 @@ export class VaultPage {
 			const r = roomOf(e.path);
 			if (r) touch(r, 1);
 		}
-		for (const f of this.pendingFolders) if (!m.has(f)) touch(f, 0);
-		return [...m.entries()]
-			.sort((a, b) => a[0].localeCompare(b[0]))
-			.map(([name, count]) => ({ name, label: name.split('/').pop() ?? name, depth: name.split('/').length - 1, count }));
+		for (const f of this.folders) if (!m.has(f)) touch(f, 0);
+		const rank = new Map(this.folders.map((f, i) => [f, i]));
+		const children = (parent: string) => [...m.keys()].filter((k) => roomOf(k) === parent).sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity) || a.localeCompare(b));
+		const out: { name: string; label: string; depth: number; count: number }[] = [];
+		const walk = (parent: string, depth: number) => {
+			for (const name of children(parent)) {
+				out.push({ name, label: name.split('/').pop() ?? name, depth, count: m.get(name) ?? 0 });
+				walk(name, depth + 1);
+			}
+		};
+		walk('', 0);
+		return out;
 	}
 
 	/** The folder currently open in the list, or null for All / Recent. */
@@ -215,6 +233,7 @@ export class VaultPage {
 			}
 			this.current = this.chambers.find((c) => c.id === this.status!.current) ?? this.chambers[0] ?? null;
 			this.sync = this.current?.sync ?? null;
+			this.folders = this.current?.folders ?? [];
 			await this.loadEntries();
 		} catch (e) {
 			this.toast.error('Could not load', asAppError(e).message);
@@ -250,7 +269,6 @@ export class VaultPage {
 		await this.backend.selectChamber(id);
 		this.clearSelection();
 		this.room = null;
-		this.pendingFolders = [];
 		await this.refresh();
 	}
 
@@ -377,7 +395,6 @@ export class VaultPage {
 			await this.backend.sealText(this.current.id, path, this.addValue);
 			this.closeDialog('add');
 			await this.loadEntries();
-			this.pendingFolders = this.pendingFolders.filter((f) => f !== this.currentFolder);
 			await this.open(path);
 			this.toast.success('Sealed', this.currentFolder ? `into ${this.currentFolder}` : undefined);
 			this.addName = this.addValue = '';
@@ -604,6 +621,29 @@ export class VaultPage {
 		return this.menuFolder ?? this.currentFolder;
 	}
 
+	/** Save the folder order (and empty folders) for this chamber. Fire and forget; the UI already reflects it. */
+	private saveFolders(list: string[]) {
+		const next = [...new Set(list)];
+		this.folders = next;
+		if (this.current) {
+			this.current = { ...this.current, folders: next };
+			this.backend.setFolders(this.current.id, next).catch(() => undefined);
+		}
+	}
+
+	/** Put `folder` among the children of `parent` next to `anchor` (a sibling), and remember the whole sidebar order. */
+	private placeFolder(folder: string, parent: string, anchor: string, pos: 'before' | 'after') {
+		const order = this.rooms.map((r) => r.name).filter((n) => n !== folder && !n.startsWith(folder + '/'));
+		const siblings = order.filter((n) => roomOf(n) === parent);
+		let i = siblings.indexOf(anchor);
+		if (i < 0) i = siblings.length;
+		else if (pos === 'after') i += 1;
+		siblings.splice(i, 0, folder);
+		// Rebuild the flat list: every folder that is not a child of `parent` keeps its place, the siblings take the new order.
+		const others = order.filter((n) => roomOf(n) !== parent);
+		this.saveFolders([...others, ...siblings]);
+	}
+
 	/** Folders a given folder could be moved into: everything except itself and its descendants. */
 	folderTargetsFor(folder: string) {
 		return this.rooms.filter((r) => r.name !== folder && !r.name.startsWith(folder + '/'));
@@ -623,8 +663,8 @@ export class VaultPage {
 		if (!name) return;
 		this.menuFolder = name;
 		if (action === 'new') {
-			this.room = name;
 			this.folderName = '';
+			this.newFolderParent = name;
 			this.openDialog('new-folder');
 		} else if (action === 'rename') {
 			this.renameName = name.split('/').pop() ?? name;
@@ -637,27 +677,36 @@ export class VaultPage {
 		}
 	}
 
+	/** The `+` in the sidebar: suggests the open folder as the parent, but the dialog lets you pick any place. */
 	openNewFolder() {
 		this.menuFolder = null;
 		this.folderName = '';
+		this.newFolderParent = this.currentFolder ?? '';
 		this.openDialog('new-folder');
 	}
 
-	/** New folders are created inside the folder open in the sidebar; at the top level otherwise. */
-	createFolder() {
+	get newFolderPath(): string {
 		const leaf = normalizeFolder(this.folderName);
-		const parent = this.menuFolder ?? this.currentFolder;
-		const name = leaf && parent ? `${parent}/${leaf}` : leaf;
+		return leaf && this.newFolderParent ? `${this.newFolderParent}/${leaf}` : leaf;
+	}
+
+	createFolder() {
+		const name = this.newFolderPath;
 		if (!name) {
 			this.toast.error('That name will not work', 'Use letters, numbers, dashes.');
 			return;
 		}
-		if (!this.rooms.some((r) => r.name === name)) this.pendingFolders = [...this.pendingFolders, name];
+		if (this.rooms.some((r) => r.name === name)) {
+			this.toast.error('That folder already exists');
+			return;
+		}
+		// Capture the current sidebar order first so the new folder lands last among its siblings.
+		this.saveFolders([...this.rooms.map((r) => r.name), name]);
 		this.closeDialog('new-folder');
 		this.folderName = '';
 		this.menuFolder = null;
 		this.room = name;
-		this.toast.success('Folder ready', 'Drop or add a secret to keep it.');
+		this.toast.success('Folder ready', 'Add or drop a secret into it.');
 	}
 
 	openRenameFolder() {
@@ -688,23 +737,24 @@ export class VaultPage {
 		}
 	}
 
-	/** Move a whole folder into another folder ('' = top level). */
-	async moveFolder(from: string, intoFolder: string) {
+	/** Move a whole folder into another folder ('' = top level). Resolves to false when the move was refused. */
+	async moveFolder(from: string, intoFolder: string): Promise<boolean> {
 		if (from === intoFolder || intoFolder.startsWith(from + '/')) {
 			this.toast.error('Cannot move a folder into itself');
-			return;
+			return false;
 		}
 		const leaf = from.split('/').pop() ?? from;
 		const to = intoFolder ? `${intoFolder}/${leaf}` : leaf;
-		if (to === from) return;
+		if (to === from) return true;
 		if (this.rooms.some((r) => r.name === to)) {
 			this.toast.error('A folder with that name is already there', 'Rename one of them first.');
-			return;
+			return false;
 		}
 		this.busy = 'folder';
 		try {
 			await this.relocateFolder(from, to, intoFolder ? `Moved into ${intoFolder}` : 'Moved to the top level');
 			this.closeDialog('move-folder');
+			return true;
 		} finally {
 			this.busy = '';
 		}
@@ -719,7 +769,7 @@ export class VaultPage {
 	private async relocateFolder(from: string, to: string, message: string) {
 		const moves = this.entriesIn(from).map((e) => ({ from: e.path, to: to + e.path.slice(from.length) }));
 		if (moves.length) await this.applyMoves(moves, message);
-		this.pendingFolders = this.pendingFolders.map((f) => (f === from || f.startsWith(from + '/') ? to + f.slice(from.length) : f));
+		this.saveFolders(this.rooms.map((r) => r.name).map((f) => (f === from || f.startsWith(from + '/') ? to + f.slice(from.length) : f)));
 		if (this.room === from || this.room?.startsWith(from + '/')) this.room = to + this.room.slice(from.length);
 		this.menuFolder = null;
 	}
@@ -764,7 +814,7 @@ export class VaultPage {
 	}
 
 	private forgetFolder(from: string, parent: string) {
-		this.pendingFolders = this.pendingFolders.filter((f) => f !== from && !f.startsWith(from + '/'));
+		this.saveFolders(this.rooms.map((r) => r.name).filter((f) => f !== from && !f.startsWith(from + '/')));
 		if (this.room === from || this.room?.startsWith(from + '/')) this.room = parent || null;
 		this.menuFolder = null;
 	}
@@ -806,8 +856,6 @@ export class VaultPage {
 			const n = await this.backend.moveSecrets(this.current.id, moves);
 			const selected = moves.find((m) => m.from === this.selectedPath);
 			await this.loadEntries();
-			// A pending folder that now has real secrets no longer needs to be remembered.
-			this.pendingFolders = this.pendingFolders.filter((f) => !this.entries.some((e) => roomOf(e.path) === f || roomOf(e.path).startsWith(f + '/')));
 			if (selected) await this.open(selected.to);
 			this.toast.success(n === 1 ? message : `${message} · ${n} secrets`);
 			this.refreshSync();
@@ -854,9 +902,22 @@ export class VaultPage {
 		}
 		this.ghostX = e.clientX;
 		this.ghostY = e.clientY;
-		const over = this.folderAtClient(e.clientX, e.clientY);
-		// A folder cannot be dropped on itself or inside itself.
-		this.moveTo = this.movingFolder && over !== null && (over === this.movingFolder || over.startsWith(this.movingFolder + '/')) ? null : over;
+		const hit = this.folderAtClient(e.clientX, e.clientY);
+		// A folder cannot land on itself, inside itself, or next to one of its own children.
+		const onSelf = this.movingFolder !== null && hit !== null && (hit.room === this.movingFolder || hit.room.startsWith(this.movingFolder + '/'));
+		if (!hit || onSelf) {
+			this.moveTo = null;
+			this.movePos = 'into';
+			return;
+		}
+		// Dragging a folder: the top and bottom quarter of a folder row mean "put it before/after", the middle means "put it inside".
+		let pos: 'into' | 'before' | 'after' = 'into';
+		if (this.movingFolder && hit.room !== '') {
+			const t = (e.clientY - hit.rect.top) / Math.max(1, hit.rect.height);
+			pos = t < 0.25 ? 'before' : t > 0.75 ? 'after' : 'into';
+		}
+		this.moveTo = hit.room;
+		this.movePos = pos;
 	};
 
 	private _onRowUp = () => {
@@ -864,30 +925,48 @@ export class VaultPage {
 		const path = this.moving;
 		const folder = this.movingFolder;
 		const target = this.moveTo;
+		const pos = this.movePos;
 		this._dragStart = null;
 		this.moving = null;
 		this.movingFolder = null;
 		this.moveTo = null;
+		this.movePos = 'into';
 		if (target === null) return;
 		if (path && target !== roomOf(path)) this.moveSecret(path, target).catch(() => undefined);
-		if (folder && target !== roomOf(folder)) this.moveFolder(folder, target).catch(() => undefined);
+		if (folder) this.dropFolder(folder, target, pos).catch(() => undefined);
 	};
 
+	/** Drop a dragged folder: inside `target`, or as a sibling of `target` (reordering, and re-parenting if needed). */
+	private async dropFolder(folder: string, target: string, pos: 'into' | 'before' | 'after') {
+		if (pos === 'into') {
+			if (target !== roomOf(folder)) await this.moveFolder(folder, target);
+			return;
+		}
+		const parent = roomOf(target);
+		let moved = folder;
+		if (parent !== roomOf(folder)) {
+			moved = (parent ? parent + '/' : '') + (folder.split('/').pop() ?? folder);
+			if (!(await this.moveFolder(folder, parent))) return;
+		}
+		this.placeFolder(moved, parent, target, pos);
+	}
+
+	/** Click opens a folder; clicking the open folder again goes back to All secrets. */
 	folderClick(name: string) {
 		if (this._didDrag) {
 			this._didDrag = false;
 			return;
 		}
-		this.room = name;
+		this.room = this.room === name ? null : name;
 	}
 
-	/** Folder under a client-space point: '' for All secrets (top level), null when not over a folder. */
-	private folderAtClient(x: number, y: number): string | null {
+	/** Folder row under a client-space point: room '' for All secrets (top level), null when not over a folder. */
+	private folderAtClient(x: number, y: number): { room: string; rect: DOMRect } | null {
 		try {
 			const root = this.root() as ShadowRoot | null;
 			const el = root?.elementFromPoint?.(x, y) as HTMLElement | null;
 			const item = el?.closest?.('[data-room]') as HTMLElement | null;
-			return item ? item.dataset.room ?? '' : null;
+			return item ? { room: item.dataset.room ?? '', rect: item.getBoundingClientRect() } : null;
 		} catch {
 			return null;
 		}
