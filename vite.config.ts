@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { defineConfig } from 'vite';
+import { defineConfig, normalizePath } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { melodicStylesPlugin } from './vite-plugin-melodic-styles';
 
@@ -13,7 +13,8 @@ export default defineConfig({
 			},
 		}),
 		viteStaticCopy({
-			targets: [{ src: resolve(__dirname, 'node_modules/@melodicdev/components/assets/fonts'), dest: 'assets' }],
+			// normalizePath: the src is a fast-glob pattern, which wants forward slashes even on Windows.
+			targets: [{ src: normalizePath(resolve(__dirname, 'node_modules/@melodicdev/components/assets/fonts')), dest: 'assets' }],
 		}),
 	],
 	base: './',
