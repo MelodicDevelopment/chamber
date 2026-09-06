@@ -21,10 +21,10 @@ or validated; the work is copying secrets into this repository.
    | ---------------------------- | --------------------------------------------------------------------- |
    | `APPLE_CERTIFICATE`          | `base64 -i DeveloperID.p12 \| pbcopy`                                 |
    | `APPLE_CERTIFICATE_PASSWORD` | the .p12 export password                                              |
-   | `APPLE_SIGNING_IDENTITY`     | `Developer ID Application: Melodic Development, LLC (TEAMID)`        |
+   | `APPLE_SIGNING_IDENTITY`     | `Developer ID Application: RICHARD PAUL HOPKINS (L2SPUZJW2P)` (from `security find-identity -v -p codesigning`) |
    | `APPLE_ID`                   | the Apple ID that owns the team                                       |
    | `APPLE_PASSWORD`             | an app-specific password for that Apple ID (appleid.apple.com)        |
-   | `APPLE_TEAM_ID`              | the 10-character team ID                                              |
+   | `APPLE_TEAM_ID`              | `L2SPUZJW2P`                                                          |
 
    With these set, tauri-bundler signs the app with the hardened runtime, submits the .dmg to
    `notarytool`, waits for approval, and staples the ticket. No entitlements file is needed:
@@ -78,6 +78,7 @@ AppImage, .deb, and .rpm. If distro signing ever matters, GPG-sign the .deb/.rpm
    (`Chamber_x.y.z_universal.dmg`, `Chamber_x.y.z_x64-setup.exe`, `Chamber_x.y.z_x64_en-US.msi`,
    `Chamber_x.y.z_amd64.AppImage`, `.deb`, `.rpm`), write the notes, and publish.
 5. The marketing site's download button links to `releases/latest`, so it updates on its own.
+   The repository must be **public** for that link (and the README/LICENSE links on the site) to work for visitors.
 
 ## Verifying a build
 

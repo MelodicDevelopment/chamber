@@ -21,7 +21,7 @@ Requires Rust (stable), Node 22+, and `git` on the PATH at runtime. Git Credenti
 
 ## Website
 
-`web/` is the static marketing site at chamber.melodic.dev. Pushes to `main` that touch `web/` deploy it over FTP (`.github/workflows/deploy-website.yml`, secrets `FTP_HOST`, `FTP_USERNAME`, `FTP_PASSWORD`). `web/screenshot.png` is the hero image; retake it from the browser demo when the UI changes. To view it locally: `docker compose -f web/docker-compose.yml up -d` and open http://localhost:8931.
+`web/` is the static marketing site at chamber.melodic.dev, served by nginx from `web/Dockerfile` on Railway (project `chamber`, root directory `web/`). Railway redeploys on pushes to `main` that touch `web/`; `railway up` from `web/` deploys by hand. `web/screenshot.png` is the hero image; retake it from the browser demo when the UI changes. To view it locally: `docker compose -f web/docker-compose.yml up -d` and open http://localhost:8931.
 
 ## Release
 

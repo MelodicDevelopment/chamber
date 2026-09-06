@@ -1,0 +1,35 @@
+# Cache policy by content type. Done with a map instead of per-location
+# add_header because nginx drops every server-level add_header inside any
+# location that declares its own; this way one set of headers applies everywhere.
+map $sent_http_content_type $chamber_cache {
+	default            "public, max-age=300";
+	~^image/           "public, max-age=86400";
+	~^text/css         "public, max-age=86400";
+	~javascript        "public, max-age=86400";
+	~^font/            "public, max-age=604800";
+}
+
+server {
+	listen ${PORT};
+	listen [::]:${PORT};
+	server_name _;
+	root /usr/share/nginx/html;
+	index index.html;
+
+	# Clean URLs: /privacy resolves to /privacy.html; /privacy.html keeps working.
+	location / {
+		try_files $uri $uri.html $uri/ =404;
+	}
+
+	error_page 404 /404.html;
+
+	gzip on;
+	gzip_types text/plain text/css application/javascript application/json image/svg+xml application/xml;
+	gzip_min_length 512;
+
+	add_header Cache-Control $chamber_cache always;
+	add_header X-Content-Type-Options "nosniff" always;
+	add_header X-Frame-Options "DENY" always;
+	add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+	add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+}

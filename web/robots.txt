@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+
+Sitemap: https://chamber.melodic.dev/sitemap.xml

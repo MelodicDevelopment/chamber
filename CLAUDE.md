@@ -31,9 +31,9 @@ src/
   shared/        env parsing/masking, formatting, keyhole mark, theme.ts (appearance), pairing.ts (QR payload), qr-code + qr-scanner components
   styles/global.css   Chamber theme: light tokens on :root, dark on :root[data-theme='dark'] (linked with `melodic-styles`)
 vite-plugin-melodic-styles.ts   copied from kingdom; required so --ml-* tokens reach shadow roots
-web/                  static marketing site (chamber.melodic.dev), same shape as tapedeck/web; deployed by FTP on push
+web/                  static marketing site (chamber.melodic.dev): nginx Dockerfile on Railway (root dir web/), docker-compose for local, og.png/sitemap/robots/404 for SEO
 scripts/sign-windows.mjs   Windows Authenticode via Azure Trusted Signing, called by bundle.windows.signCommand
-.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed draft release), deploy-website.yml
+.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed draft release)
 docs/release.md       signing/notarization setup + per-release checklist
 ```
 

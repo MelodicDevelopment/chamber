@@ -1,0 +1,17 @@
+# Railway deployment config for the Chamber marketing site.
+#
+# In the Railway dashboard set the service's Root Directory to `web/` and
+# connect the GitHub repo; Railway then builds web/Dockerfile on every push
+# that touches web/ (watch paths below). PORT is injected by Railway and read
+# by nginx through the template in Dockerfile.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+watchPatterns = ["web/**"]
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
