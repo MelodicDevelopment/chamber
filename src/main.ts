@@ -9,13 +9,13 @@ import '@melodicdev/core/routing';
 import './components';
 
 import { bootstrap } from '@melodicdev/core/bootstrap';
-import { applyTheme } from '@melodicdev/components/theme';
+import { initTheme } from './shared/theme';
 
 await bootstrap({
 	target: '#app',
 	rootComponent: 'app-root',
 	devMode: import.meta.env.DEV,
 	onBefore: () => {
-		applyTheme('dark');
+		initTheme();
 	},
 });

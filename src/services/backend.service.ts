@@ -37,6 +37,9 @@ export interface AppStatus {
 	deviceName: string;
 	gitAvailable: boolean;
 	gcmAvailable: boolean;
+	gcmInstall: GcmInstall;
+	/** Git author name; with deviceName it forms this device's keeper label. */
+	authorName: string;
 	chambers: ChamberSummary[];
 	current: string | null;
 }
@@ -68,6 +71,13 @@ export interface Recipient {
 	publicKey: string;
 	label: string;
 }
+/** How to get Git Credential Manager on this OS. */
+export interface GcmInstall {
+	platform: 'macos' | 'windows' | 'linux';
+	command: string | null;
+	url: string;
+	note: string;
+}
 export interface HostInfo {
 	url: string;
 	host: string;
@@ -83,6 +93,7 @@ export interface HostInfo {
 	credentialCached: boolean;
 	gcmAvailable: boolean;
 	tokenStored: boolean;
+	gcmInstall: GcmInstall;
 }
 export interface AppError {
 	kind: 'conflict' | 'auth' | 'git' | 'locked' | 'keychain' | 'error';
@@ -149,6 +160,8 @@ export class BackendService {
 }
 
 /** Browser-only stand-in so `npm run dev` shows something. Nothing persists. */
+const DEMO_GCM: GcmInstall = { platform: 'macos', command: 'brew install --cask git-credential-manager', url: 'https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/install.md#macos', note: 'Needs Homebrew. There is also a .pkg installer on the releases page.' };
+
 class DemoBackend {
 	private folders: string[] = [];
 	private secrets = new Map<string, string>([
@@ -166,7 +179,7 @@ class DemoBackend {
 			case 'app_status':
 				return {
 					identityExists: true, publicKey: 'age1demo000000000000000000000000000000000000000000000000000000', recoverySaved: this.recoverySaved,
-					deviceName: 'this browser', gitAvailable: true, gcmAvailable: false, current: 'demo',
+					deviceName: 'this browser', gitAvailable: true, gcmAvailable: false, gcmInstall: DEMO_GCM, authorName: 'You', current: 'demo',
 					chambers: [{ id: 'demo', name: 'Personal', path: '/demo', remote: 'git@github.com:you/secrets.git', createdAt: now, folders: this.folders, hasAccess: true, keepers: 1, sync: { branch: 'main', remote: 'git@github.com:you/secrets.git', ahead: 0, behind: 0, dirty: false, mergeInProgress: false, conflicts: [] } }],
 				} as T;
 			case 'identity_public_key': return 'age1demo000000000000000000000000000000000000000000000000000000' as T;
@@ -201,7 +214,7 @@ class DemoBackend {
 			case 'auth_detect': {
 				const url = String(args.url ?? '');
 				const isSsh = url.startsWith('git@') || url.startsWith('ssh://');
-				return { url, host: 'github.com', provider: 'github', providerName: 'GitHub', isSsh, sshUrl: isSsh ? null : 'git@github.com:you/secrets.git', httpsUrl: null, tokenPage: 'https://github.com/settings/personal-access-tokens/new', tokenScope: 'Contents: read and write', tokenUsername: 'x-access-token', sshKeyAvailable: true, credentialCached: false, gcmAvailable: false, tokenStored: false } as T;
+				return { url, host: 'github.com', provider: 'github', providerName: 'GitHub', isSsh, sshUrl: isSsh ? null : 'git@github.com:you/secrets.git', httpsUrl: null, tokenPage: 'https://github.com/settings/personal-access-tokens/new', tokenScope: 'Contents: read and write', tokenUsername: 'x-access-token', sshKeyAvailable: true, credentialCached: false, gcmAvailable: false, tokenStored: false, gcmInstall: DEMO_GCM } as T;
 			}
 			case 'copy_text': try { await navigator.clipboard.writeText(String(args.text)); } catch { /* browser preview */ } return undefined as T;
 			case 'open_url': window.open(String(args.url), '_blank'); return undefined as T;

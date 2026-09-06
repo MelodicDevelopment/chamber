@@ -7,6 +7,8 @@ import { vaultPageStyles } from './vault-page.styles';
 import { BackendService, asAppError, isDesktop, type AppStatus, type ChamberSummary, type Entry, type SecretContent, type SyncStatus, type LogEntry, type Recipient } from '../../services/backend.service';
 import { parseEnv, looksLikeEnv, mask, type EnvLine } from '../../shared/env';
 import { kindOf, roomOf, fileName, normalizeFolder } from '../../shared/format';
+import { savedTheme, setTheme, type ThemeMode } from '../../shared/theme';
+import { pairingPayload, parsePairing, deviceLabel } from '../../shared/pairing';
 
 type DialogId = Parameters<DialogService['close']>[0];
 
@@ -86,6 +88,9 @@ export class VaultPage {
 	newKeeperLabel = '';
 	editText = '';
 	kitPassphrase = '';
+	theme: ThemeMode = savedTheme();
+	/** True while the Scan dialog holds a live camera. */
+	scanning = false;
 
 	private _revealTimers = new Map<number, { until: number; timer: number }>();
 	private _tick: number | null = null;
@@ -166,6 +171,12 @@ export class VaultPage {
 	get initials(): string {
 		const n = this.status?.deviceName ?? '';
 		return n.split(/[\s-_.]+/).filter(Boolean).slice(0, 2).map((s) => s.charAt(0).toUpperCase()).join('') || 'Me';
+	}
+
+	/** What this device shows as a QR code: its public key plus the keeper label it asks for. */
+	get pairing(): string {
+		const s = this.status;
+		return s?.publicKey ? pairingPayload(s.publicKey, deviceLabel(s.authorName, s.deviceName)) : '';
 	}
 
 	shortRemote(url: string): string {
@@ -595,6 +606,37 @@ export class VaultPage {
 		} catch (e) {
 			this.toast.error('Could not remove keeper', asAppError(e).message);
 		}
+	}
+
+	/** Keepers → Scan: swap the Keepers dialog for the camera; it comes back with the fields filled in. */
+	startScan() {
+		this.closeDialog('keepers');
+		this.scanning = true;
+		this.openDialog('scan');
+	}
+
+	/** Fires on the Scan dialog's close, whether a code was read or the user cancelled. */
+	stopScan() {
+		if (!this.scanning) return;
+		this.scanning = false;
+		this.openDialog('keepers');
+	}
+
+	onScan(text: string) {
+		const p = parsePairing(text);
+		if (!p) {
+			this.toast.error('That code is not a Chamber key', 'Expected an age1… public key. Try again, or paste the key.');
+		} else {
+			this.newKeeperKey = p.publicKey;
+			this.newKeeperLabel = p.label;
+			this.toast.success('Device scanned', `${p.label || 'Its key'} is filled in. Add and rekey when ready.`);
+		}
+		this.closeDialog('scan');
+	}
+
+	pickTheme(mode: ThemeMode) {
+		this.theme = mode;
+		setTheme(mode);
 	}
 
 	async saveKit() {

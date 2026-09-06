@@ -40,6 +40,57 @@ pub struct HostInfo {
     pub credential_cached: bool,
     pub gcm_available: bool,
     pub token_stored: bool,
+    /// How to get Git Credential Manager on this OS, for when `gcm_available` is false.
+    pub gcm_install: GcmInstall,
+}
+
+/// Platform-specific way to install Git Credential Manager.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GcmInstall {
+    pub platform: &'static str,
+    /// One shell command that installs it, when there is a good one.
+    pub command: Option<&'static str>,
+    pub url: &'static str,
+    pub note: &'static str,
+}
+
+pub fn gcm_install() -> GcmInstall {
+    #[cfg(target_os = "macos")]
+    {
+        GcmInstall {
+            platform: "macos",
+            command: Some("brew install --cask git-credential-manager"),
+            url: "https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/install.md#macos",
+            note: "Needs Homebrew. There is also a .pkg installer on the releases page.",
+        }
+    }
+    #[cfg(windows)]
+    {
+        GcmInstall {
+            platform: "windows",
+            command: Some("winget install --id Git.Git -e --source winget"),
+            url: "https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/install.md#windows",
+            note: "Git for Windows bundles it. If Git is already installed, re-run its installer and keep Git Credential Manager selected.",
+        }
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        GcmInstall {
+            platform: "linux",
+            command: None,
+            url: "https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/install.md#linux",
+            note: "Install the .deb or tarball from the releases page, then run git-credential-manager configure.",
+        }
+    }
+}
+
+/// Whether git should be allowed to open a browser or prompt during this call.
+/// Background work (status polls) must never prompt; user-initiated syncs may.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Prompt {
+    Interactive,
+    Silent,
 }
 
 pub fn detect(url: &str) -> HostInfo {
@@ -86,6 +137,7 @@ pub fn detect(url: &str) -> HostInfo {
         credential_cached: !is_ssh && credential_cached(&host),
         gcm_available: gcm_available(),
         token_stored: token(&host).map(|t| t.is_some()).unwrap_or(false),
+        gcm_install: gcm_install(),
         url,
         host,
         provider,
@@ -125,12 +177,33 @@ pub fn ssh_key_available() -> bool {
 }
 
 pub fn gcm_available() -> bool {
-    for cmd in ["git-credential-manager", "git-credential-manager-core"] {
-        if Command::new(cmd).arg("--version").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false) {
-            return true;
-        }
+    gcm_helper().is_some()
+}
+
+/// The `credential.helper` name that reaches Git Credential Manager on this machine.
+/// GCM 2.x installs `git-credential-manager` (helper name `manager`); older builds
+/// installed `git-credential-manager-core` (`manager-core`).
+pub fn gcm_helper() -> Option<&'static str> {
+    let runs = |cmd: &str, args: &[&str]| Command::new(cmd).args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false);
+    if runs("git-credential-manager", &["--version"]) || runs("git", &["credential-manager", "--version"]) {
+        return Some("manager");
     }
-    Command::new("git").args(["credential-manager", "--version"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false)
+    if runs("git-credential-manager-core", &["--version"]) {
+        return Some("manager-core");
+    }
+    None
+}
+
+/// True when the user's own git config already routes credentials through GCM.
+fn gcm_configured() -> bool {
+    Command::new("git")
+        .args(["config", "--get-all", "credential.helper"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).lines().any(|l| l.trim().contains("manager")))
+        .unwrap_or(false)
 }
 
 /// Ask git's configured helpers for a credential without letting them prompt.
@@ -180,20 +253,45 @@ pub fn forget_token(host: &str) -> Result<()> {
     }
 }
 
-/// Environment that makes git use a stored token for `host` via GIT_ASKPASS.
-/// Returns an empty list when there is no token, so git falls back to its own
-/// helpers (SSH agent, osxkeychain, GCM, ...).
-pub fn env_for(host: &str, askpass_dir: &Path) -> Result<Vec<(String, String)>> {
-    let Some((user, secret)) = token(host)? else { return Ok(vec![]) };
-    let script = askpass_script(askpass_dir)?;
-    Ok(vec![
-        ("GIT_ASKPASS".into(), script.to_string_lossy().to_string()),
-        ("CHAMBER_GIT_USER".into(), user),
-        ("CHAMBER_GIT_SECRET".into(), secret),
-        ("GIT_CONFIG_COUNT".into(), "1".into()),
-        ("GIT_CONFIG_KEY_0".into(), "credential.helper".into()),
-        ("GIT_CONFIG_VALUE_0".into(), "".into()), // don't let other helpers cache or override the token
-    ])
+/// Environment for one git call against `host`.
+///
+/// With a stored token: GIT_ASKPASS feeds it and every other helper is disabled.
+/// Without one: git's own helpers run (SSH agent, osxkeychain, ...). If Git
+/// Credential Manager is installed but not wired into the user's config, it is
+/// added as a helper for this call so the browser sign-in rung works. `Silent`
+/// forbids GCM from prompting at all, so background fetches never open a browser.
+pub fn env_for(host: &str, askpass_dir: &Path, prompt: Prompt) -> Result<Vec<(String, String)>> {
+    if let Some((user, secret)) = token(host)? {
+        let script = askpass_script(askpass_dir)?;
+        return Ok(vec![
+            ("GIT_ASKPASS".into(), script.to_string_lossy().to_string()),
+            ("CHAMBER_GIT_USER".into(), user),
+            ("CHAMBER_GIT_SECRET".into(), secret),
+            ("GIT_CONFIG_COUNT".into(), "1".into()),
+            ("GIT_CONFIG_KEY_0".into(), "credential.helper".into()),
+            ("GIT_CONFIG_VALUE_0".into(), "".into()), // don't let other helpers cache or override the token
+        ]);
+    }
+    let mut env: Vec<(String, String)> = vec![];
+    if prompt == Prompt::Silent {
+        env.push(("GCM_INTERACTIVE".into(), "never".into()));
+    }
+    if let Some(helper) = gcm_helper() {
+        if !gcm_configured() {
+            env.push(("GIT_CONFIG_COUNT".into(), "1".into()));
+            env.push(("GIT_CONFIG_KEY_0".into(), "credential.helper".into()));
+            env.push(("GIT_CONFIG_VALUE_0".into(), helper.into()));
+        }
+        // GCM on Linux refuses to run until a credential store is chosen; default to the desktop keyring.
+        #[cfg(all(unix, not(target_os = "macos")))]
+        if std::env::var_os("GCM_CREDENTIAL_STORE").is_none() {
+            let configured = Command::new("git").args(["config", "--get", "credential.credentialStore"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).output().map(|o| !o.stdout.is_empty()).unwrap_or(false);
+            if !configured {
+                env.push(("GCM_CREDENTIAL_STORE".into(), "secretservice".into()));
+            }
+        }
+    }
+    Ok(env)
 }
 
 fn askpass_script(dir: &Path) -> Result<PathBuf> {
@@ -215,9 +313,9 @@ fn askpass_script(dir: &Path) -> Result<PathBuf> {
 }
 
 /// Can we reach the repo with what we have? Classifies the failure for the UI.
-pub fn check(url: &str, askpass_dir: &Path) -> Result<()> {
+pub fn check(url: &str, askpass_dir: &Path, prompt: Prompt) -> Result<()> {
     let info = detect(url);
-    let env = if info.is_ssh { vec![] } else { env_for(&info.host, askpass_dir)? };
+    let env = if info.is_ssh { vec![] } else { env_for(&info.host, askpass_dir, prompt)? };
     Git::ls_remote(url, &env).map_err(|e| match e {
         AppError::Git(m) => AppError::Git(m),
         other => other,

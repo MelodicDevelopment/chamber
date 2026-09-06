@@ -4,6 +4,7 @@ import { Service } from '@melodicdev/core/injection';
 import { RouterService } from '@melodicdev/core/routing';
 import { ToastService } from '@melodicdev/components';
 import { BackendService, asAppError, type HostInfo } from '../../services/backend.service';
+import { pairingPayload, deviceLabel } from '../../shared/pairing';
 
 type Mode = 'url' | 'connect' | 'browser' | 'token' | 'cloning';
 
@@ -31,11 +32,14 @@ type Mode = 'url' | 'connect' | 'browser' | 'token' | 'cloning';
 								<ml-icon slot="prefix" icon="link"></ml-icon>
 							</ml-input>
 							<div class="keybox">
-								<div class="keyhead"><span>Your public key</span><span class="grow"></span>
-									<ml-button variant="ghost" size="xs" @ml:click=${() => self.copyKey()}><ml-icon slot="icon-start" icon="copy"></ml-icon>Copy</ml-button>
+								<chamber-qr value=${self.pairing} size="124"></chamber-qr>
+								<div class="grow">
+									<div class="keyhead"><span>Your public key</span><span class="grow"></span>
+										<ml-button variant="ghost" size="xs" @ml:click=${() => self.copyKey()}><ml-icon slot="icon-start" icon="copy"></ml-icon>Copy</ml-button>
+									</div>
+									<div class="mono key"><span class="k">age1</span>${self.publicKey.slice(4)}</div>
+									<div class="fine">A keeper can scan this code from their Keepers dialog, or you can send them the key. It only lets them encrypt to you, so it is safe to share anywhere. Your private key never leaves this computer.</div>
 								</div>
-								<div class="mono key"><span class="k">age1</span>${self.publicKey.slice(4)}</div>
-								<div class="fine">Send this to a keeper of the chamber. It only lets them encrypt to you, so it is safe to share anywhere. Your private key never leaves this computer.</div>
 							</div>
 						</div>
 						<div class="foot">
@@ -47,10 +51,22 @@ type Mode = 'url' | 'connect' | 'browser' | 'token' | 'cloning';
 						<div class="urlbar"><ml-icon icon="globe" size="sm"></ml-icon><span class="mono">${self.host.url}</span><ml-badge size="sm">${self.host.providerName}</ml-badge></div>
 						<div class="options">
 							${!self.host.isSsh ? html`
-								<div class="opt pick">
+								<div class="opt ${self.host.gcmAvailable ? 'pick' : ''}">
 									<span class="tile"><ml-icon icon="globe"></ml-icon></span>
-									<div class="grow"><div class="title">Sign in with your browser</div><div class="desc">${self.host.gcmAvailable ? `Opens ${self.host.host} to approve access. Handled by Git Credential Manager; the token is kept in your keychain.` : 'Needs Git Credential Manager, which is not installed on this computer. Use SSH or a token instead.'}</div></div>
-									<ml-button variant="primary" ?disabled=${!self.host.gcmAvailable} @ml:click=${() => self.viaBrowser()}>Sign in</ml-button>
+									<div class="grow">
+										<div class="title">Sign in with your browser</div>
+										<div class="desc">${self.host.gcmAvailable ? `Opens ${self.host.host} to approve access. Handled by Git Credential Manager; the token is kept in your keychain.` : `Needs Git Credential Manager, which is not installed on this computer. ${self.host.gcmInstall.note}`}</div>
+										${!self.host.gcmAvailable ? html`
+											<div class="install">
+												${self.host.gcmInstall.command ? html`
+													<code class="cmd mono">${self.host.gcmInstall.command}</code>
+													<ml-button variant="ghost" size="xs" title="Copy command" @ml:click=${() => self.copyText(self.host!.gcmInstall.command!, 'Command copied')}><ml-icon icon="copy" size="xs"></ml-icon></ml-button>` : ''}
+												<a @click=${() => self.backend.openUrl(self.host!.gcmInstall.url)}>Install guide</a>
+											</div>` : ''}
+									</div>
+									${self.host.gcmAvailable
+										? html`<ml-button variant="primary" @ml:click=${() => self.viaBrowser()}>Sign in</ml-button>`
+										: html`<ml-button variant="outline" ?loading=${self.busy} title="Look for Git Credential Manager again" @ml:click=${() => self.recheck()}>Check again</ml-button>`}
 								</div>` : ''}
 							${self.host.isSsh || self.host.sshUrl ? html`
 								<div class="opt ${self.host.isSsh ? 'pick' : ''}">
@@ -112,20 +128,20 @@ type Mode = 'url' | 'connect' | 'browser' | 'token' | 'cloning';
 	styles: () => css`
 		:host { display: block; height: 100vh; }
 		.hero { position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden;
-			background: radial-gradient(ellipse 55% 60% at 16% -10%, var(--ch-glow-a) 0%, transparent 62%), radial-gradient(ellipse 55% 65% at 88% 0%, var(--ch-glow-b) 0%, transparent 60%), radial-gradient(ellipse 40% 45% at 60% 100%, var(--ch-glow-c) 0%, transparent 65%), linear-gradient(165deg, #1e1a15 0%, #121110 55%, #0a0908 100%); }
+			background: radial-gradient(ellipse 55% 60% at 16% -10%, var(--ch-glow-a) 0%, transparent 62%), radial-gradient(ellipse 55% 65% at 88% 0%, var(--ch-glow-b) 0%, transparent 60%), radial-gradient(ellipse 40% 45% at 60% 100%, var(--ch-glow-c) 0%, transparent 65%), var(--ch-hero); }
 		.grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(var(--ch-grid) 1px, transparent 1px), linear-gradient(90deg, var(--ch-grid) 1px, transparent 1px); background-size: 72px 26px; -webkit-mask-image: radial-gradient(ellipse 75% 80% at 50% 25%, #000 0%, transparent 78%); mask-image: radial-gradient(ellipse 75% 80% at 50% 25%, #000 0%, transparent 78%); }
 		.titlebar { position: relative; height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px 0 80px; flex-shrink: 0; }
 		.lockup { display: inline-flex; align-items: center; gap: 7px; }
 		.inscr { font-size: 11px; font-weight: 600; letter-spacing: 0.3em; text-transform: uppercase; color: var(--ch-brass); }
 		.center { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; padding: 0 40px 24px; overflow: auto; }
-		.card { width: 600px; box-sizing: border-box; border-radius: 24px; overflow: hidden; background: rgba(22, 20, 18, 0.78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--ml-color-border-strong); box-shadow: var(--ml-shadow-xl), 0 0 40px rgba(79, 181, 138, 0.14); }
+		.card { width: 600px; box-sizing: border-box; border-radius: 24px; overflow: hidden; background: var(--ch-card-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--ml-color-border-strong); box-shadow: var(--ml-shadow-xl), 0 0 40px rgba(79, 181, 138, 0.14); }
 		.head { padding: 28px 32px 8px; }
 		.eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.3em; text-transform: uppercase; color: var(--ch-verdigris-light); }
 		h1 { margin: 10px 0 0; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.03em; }
 		.head p { margin: 10px 0 0; font-size: 14px; color: var(--ml-color-text-muted); line-height: 1.6; }
 		.section { padding: 12px 32px 8px; display: flex; flex-direction: column; gap: 8px; }
 		label { font-size: 12px; font-weight: 600; color: var(--ml-color-text-muted); margin-top: 6px; }
-		.keybox { margin-top: 8px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--ml-color-border); background: rgba(14, 13, 11, 0.5); }
+		.keybox { margin-top: 8px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--ml-color-border); background: var(--ch-well); display: flex; align-items: flex-start; gap: 16px; }
 		.keyhead { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--ml-color-text-muted); margin-bottom: 6px; }
 		.grow { flex: 1; min-width: 0; }
 		.mono { font-family: var(--ml-font-mono); }
@@ -142,12 +158,15 @@ type Mode = 'url' | 'connect' | 'browser' | 'token' | 'cloning';
 		.tile { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, rgba(224, 166, 75, 0.16), rgba(79, 181, 138, 0.1)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 		.title { font-size: 14px; font-weight: 600; }
 		.desc { font-size: 12px; color: var(--ml-color-text-muted); line-height: 1.5; }
+		.install { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; flex-wrap: wrap; }
+		.install .cmd { padding: 4px 8px; border-radius: 6px; background: var(--ch-well); border: 1px solid var(--ml-color-border); font-size: 11px; user-select: text; }
+		.install a { cursor: pointer; font-weight: 500; }
 		.wait { margin: 20px 32px 16px; padding: 22px 20px; border-radius: 12px; background: var(--ml-color-surface); border: 1px solid var(--ml-color-border); display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
 		.chip { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 14px 0 12px; border-radius: 6px; background: var(--ml-color-surface-raised); border: 1px solid var(--ml-color-border); font-size: 12px; font-weight: 500; }
 		.pulse { width: 8px; height: 8px; border-radius: 9999px; flex-shrink: 0; }
 		.pulse.warn { background: var(--ch-brass); box-shadow: 0 0 0 4px rgba(217, 166, 82, 0.22); }
 		.pulse.brass { background: var(--ch-brass); box-shadow: 0 0 0 4px rgba(217, 166, 82, 0.22); }
-		.foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 32px; margin-top: 12px; border-top: 1px solid var(--ml-color-border); background: rgba(14, 13, 11, 0.4); }
+		.foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 32px; margin-top: 12px; border-top: 1px solid var(--ml-color-border); background: var(--ch-foot); }
 		.status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ml-color-text-muted); }
 		.btns { display: inline-flex; gap: 8px; }
 	`,
@@ -162,6 +181,7 @@ export class JoinPage {
 	host: HostInfo | null = null;
 	publicKey = '';
 	deviceName = 'laptop';
+	authorName = '';
 	token = '';
 	username = '';
 	busy = false;
@@ -189,7 +209,8 @@ export class JoinPage {
 		try {
 			const status = await this.backend.status();
 			this.publicKey = status.publicKey ?? (await this.backend.publicKey());
-			this.deviceName = status.deviceName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+			this.deviceName = status.deviceName;
+			this.authorName = status.authorName;
 		} catch (e) {
 			this.toast.error('Could not read your key', asAppError(e).message);
 		}
@@ -199,9 +220,37 @@ export class JoinPage {
 		this.router.back();
 	}
 
+	/** What the QR code carries: this device's public key and the keeper label it asks for. */
+	get pairing(): string {
+		return this.publicKey ? pairingPayload(this.publicKey, deviceLabel(this.authorName, this.deviceName)) : '';
+	}
+
 	async copyKey() {
-		await this.backend.copyText(this.publicKey);
-		this.toast.success('Public key copied');
+		await this.copyText(this.publicKey, 'Public key copied');
+	}
+
+	async copyText(text: string, message: string) {
+		try {
+			await this.backend.copyText(text);
+			this.toast.success(message);
+		} catch (e) {
+			this.toast.error('Could not copy', asAppError(e).message);
+		}
+	}
+
+	/** After installing Git Credential Manager: look again without leaving this screen. */
+	async recheck() {
+		if (!this.host) return;
+		this.busy = true;
+		try {
+			this.host = await this.backend.detectHost(this.host.url);
+			if (this.host.gcmAvailable) this.toast.success('Git Credential Manager found', 'Sign in with your browser is ready.');
+			else this.toast.info('Still not found', 'Install it, then check again. A new terminal may be needed for PATH changes; Chamber also looks in the usual install locations.');
+		} catch (e) {
+			this.toast.error('Could not check', asAppError(e).message);
+		} finally {
+			this.busy = false;
+		}
 	}
 
 	async detect() {

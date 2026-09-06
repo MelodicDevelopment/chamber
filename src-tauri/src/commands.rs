@@ -1,6 +1,6 @@
 //! Tauri commands. Thin: validate, look up the chamber, delegate.
 
-use crate::auth;
+use crate::auth::{self, Prompt};
 use crate::chamber::{Chamber, Entry, Recipient};
 use crate::config::ChamberRef;
 use crate::error::{AppError, Result};
@@ -21,6 +21,9 @@ pub struct AppStatus {
     pub device_name: String,
     pub git_available: bool,
     pub gcm_available: bool,
+    pub gcm_install: auth::GcmInstall,
+    /// Git author name; with `device_name` it forms this device's keeper label.
+    pub author_name: String,
     pub chambers: Vec<ChamberSummary>,
     pub current: Option<String>,
 }
@@ -52,7 +55,9 @@ pub struct SealResult {
     pub unchanged: Vec<String>,
 }
 
-fn open_chamber(state: &State<AppState>, id: &str) -> Result<(Chamber, ChamberRef)> {
+/// `prompt` says whether git may open a browser (GCM) during this call. Only
+/// user-initiated network work should pass `Interactive`.
+fn open_chamber(state: &State<AppState>, id: &str, prompt: Prompt) -> Result<(Chamber, ChamberRef)> {
     let cfg = state.config.lock().unwrap();
     let r = cfg.find(id).cloned().ok_or_else(|| AppError::msg("unknown chamber"))?;
     let (name, email) = cfg.author();
@@ -62,7 +67,7 @@ fn open_chamber(state: &State<AppState>, id: &str) -> Result<(Chamber, ChamberRe
     if let Some(remote) = &r.remote {
         let info = auth::detect(remote);
         if !info.is_ssh {
-            let env = auth::env_for(&info.host, &state.askpass_dir())?;
+            let env = auth::env_for(&info.host, &state.askpass_dir(), prompt)?;
             chamber.git = chamber.git.with_env(env);
         }
     }
@@ -70,7 +75,7 @@ fn open_chamber(state: &State<AppState>, id: &str) -> Result<(Chamber, ChamberRe
 }
 
 fn summarize(state: &State<AppState>, r: &ChamberRef, public_key: Option<&str>) -> ChamberSummary {
-    let (has_access, keepers, sync) = match open_chamber(state, &r.id) {
+    let (has_access, keepers, sync) = match open_chamber(state, &r.id, Prompt::Silent) {
         Ok((c, _)) => {
             let recipients = c.recipients().unwrap_or_default();
             let access = public_key.map(|pk| recipients.iter().any(|x| x.public_key == pk)).unwrap_or(false);
@@ -94,6 +99,8 @@ pub fn app_status(state: State<AppState>) -> Result<AppStatus> {
         device_name: cfg.device_name(),
         git_available: Git::version().is_ok(),
         gcm_available: auth::gcm_available(),
+        gcm_install: auth::gcm_install(),
+        author_name: cfg.author().0,
         chambers,
         current: cfg.current.clone(),
     })
@@ -150,7 +157,7 @@ pub async fn chamber_create(state: State<'_, AppState>, name: String, remote: Op
     if let Some(url) = remote.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         chamber.git.set_remote(url)?;
         let info = auth::detect(url);
-        let env = if info.is_ssh { vec![] } else { auth::env_for(&info.host, &state.askpass_dir())? };
+        let env = if info.is_ssh { vec![] } else { auth::env_for(&info.host, &state.askpass_dir(), Prompt::Interactive)? };
         let g = chamber.git.clone().with_env(env);
         g.fetch()?;
         g.merge_remote()?;
@@ -164,7 +171,7 @@ pub async fn chamber_create(state: State<'_, AppState>, name: String, remote: Op
 pub async fn chamber_join(state: State<'_, AppState>, url: String, name: Option<String>) -> Result<ChamberSummary> {
     let url = url.trim().to_string();
     let info = auth::detect(&url);
-    let env = if info.is_ssh { vec![] } else { auth::env_for(&info.host, &state.askpass_dir())? };
+    let env = if info.is_ssh { vec![] } else { auth::env_for(&info.host, &state.askpass_dir(), Prompt::Interactive)? };
     let name = name.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| url.trim_end_matches('/').trim_end_matches(".git").rsplit('/').next().unwrap_or("chamber").to_string());
     let dir = state.chambers_dir().join(format!("{}-{}", slug(&name), &uuid::Uuid::new_v4().to_string()[..8]));
     Git::clone(&url, &dir, &env)?;
@@ -214,7 +221,7 @@ pub fn chamber_forget(state: State<AppState>, id: String) -> Result<()> {
 
 #[tauri::command]
 pub async fn secrets_list(state: State<'_, AppState>, chamber_id: String) -> Result<Vec<Entry>> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     c.list()
 }
 
@@ -231,14 +238,14 @@ fn to_content(path: &str, bytes: Vec<u8>) -> SecretContent {
 
 #[tauri::command]
 pub async fn secret_open(state: State<'_, AppState>, chamber_id: String, path: String) -> Result<SecretContent> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     let id = identity::load_or_create()?;
     Ok(to_content(&path, c.decrypt_path(&id, &path)?))
 }
 
 #[tauri::command]
 pub async fn secret_open_at(state: State<'_, AppState>, chamber_id: String, path: String, rev: String) -> Result<SecretContent> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     let id = identity::load_or_create()?;
     Ok(to_content(&path, c.decrypt_at(&id, &rev, &path)?))
 }
@@ -246,7 +253,7 @@ pub async fn secret_open_at(state: State<'_, AppState>, chamber_id: String, path
 /// Seal files dropped from the desktop. `folder` is the room inside the vault.
 #[tauri::command]
 pub async fn secret_seal_files(state: State<'_, AppState>, chamber_id: String, files: Vec<String>, folder: Option<String>) -> Result<SealResult> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     let id = identity::load_or_create()?;
     let folder = folder.map(|f| f.trim_matches('/').to_string()).filter(|f| !f.is_empty());
     let mut result = SealResult { sealed: vec![], unchanged: vec![] };
@@ -284,21 +291,21 @@ pub async fn secret_seal_files(state: State<'_, AppState>, chamber_id: String, f
 
 #[tauri::command]
 pub async fn secret_seal_text(state: State<'_, AppState>, chamber_id: String, path: String, text: String) -> Result<bool> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     let id = identity::load_or_create()?;
     c.seal(&id, &path, text.as_bytes())
 }
 
 #[tauri::command]
 pub async fn secret_remove(state: State<'_, AppState>, chamber_id: String, path: String) -> Result<()> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     c.remove(&path)
 }
 
 /// Remove several secrets in one commit (deleting a folder with its contents).
 #[tauri::command]
 pub async fn secrets_remove(state: State<'_, AppState>, chamber_id: String, paths: Vec<String>) -> Result<usize> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     c.remove_many(&paths)
 }
 
@@ -313,20 +320,20 @@ pub struct SecretMove {
 /// folder rename, and drag-and-drop between folders.
 #[tauri::command]
 pub async fn secrets_move(state: State<'_, AppState>, chamber_id: String, moves: Vec<SecretMove>) -> Result<usize> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     let pairs: Vec<(String, String)> = moves.into_iter().map(|m| (m.from, m.to)).collect();
     c.move_secrets(&pairs)
 }
 
 #[tauri::command]
 pub async fn secret_history(state: State<'_, AppState>, chamber_id: String, path: String) -> Result<Vec<LogEntry>> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     c.git.log(Some(&format!("vault/{path}.age")), 50)
 }
 
 #[tauri::command]
 pub async fn sync_status(state: State<'_, AppState>, chamber_id: String) -> Result<SyncStatus> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     let _ = c.git.fetch();
     c.git.status()
 }
@@ -334,7 +341,7 @@ pub async fn sync_status(state: State<'_, AppState>, chamber_id: String) -> Resu
 /// Fetch, merge what others sealed, push what we sealed.
 #[tauri::command]
 pub async fn sync_now(state: State<'_, AppState>, chamber_id: String) -> Result<SyncStatus> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Interactive)?;
     if c.git.merge_in_progress() {
         c.git.finish_merge()?;
     }
@@ -348,7 +355,7 @@ pub async fn sync_now(state: State<'_, AppState>, chamber_id: String) -> Result<
 
 #[tauri::command]
 pub async fn sync_resolve(state: State<'_, AppState>, chamber_id: String, path: String, keep: Keep) -> Result<SyncStatus> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Interactive)?;
     c.git.resolve(&path, keep)?;
     if c.git.conflicted_paths().is_empty() {
         c.git.finish_merge()?;
@@ -361,13 +368,13 @@ pub async fn sync_resolve(state: State<'_, AppState>, chamber_id: String, path: 
 
 #[tauri::command]
 pub fn keepers_list(state: State<AppState>, chamber_id: String) -> Result<Vec<Recipient>> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     c.recipients()
 }
 
 #[tauri::command]
 pub async fn keeper_add(state: State<'_, AppState>, chamber_id: String, public_key: String, label: String) -> Result<Vec<Recipient>> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     let id = identity::load_or_create()?;
     c.add_recipient(&id, public_key.trim(), label.trim())?;
     c.recipients()
@@ -376,7 +383,7 @@ pub async fn keeper_add(state: State<'_, AppState>, chamber_id: String, public_k
 /// Returns the secrets the removed key could read, so the UI can suggest rotation.
 #[tauri::command]
 pub async fn keeper_remove(state: State<'_, AppState>, chamber_id: String, public_key: String) -> Result<Vec<String>> {
-    let (c, _) = open_chamber(&state, &chamber_id)?;
+    let (c, _) = open_chamber(&state, &chamber_id, Prompt::Silent)?;
     let id = identity::load_or_create()?;
     c.remove_recipient(&id, public_key.trim())
 }
@@ -388,7 +395,7 @@ pub fn auth_detect(url: String) -> auth::HostInfo {
 
 #[tauri::command]
 pub async fn auth_check(state: State<'_, AppState>, url: String) -> Result<()> {
-    auth::check(&url, &state.askpass_dir())
+    auth::check(&url, &state.askpass_dir(), Prompt::Interactive)
 }
 
 /// Verify the token against the repo before keeping it.
@@ -397,7 +404,7 @@ pub async fn auth_store_token(state: State<'_, AppState>, url: String, username:
     let info = auth::detect(&url);
     let user = username.filter(|u| !u.trim().is_empty()).unwrap_or(info.token_username.clone());
     auth::store_token(&info.host, user.trim(), token.trim())?;
-    if let Err(e) = auth::check(&url, &state.askpass_dir()) {
+    if let Err(e) = auth::check(&url, &state.askpass_dir(), Prompt::Silent) {
         let _ = auth::forget_token(&info.host);
         return Err(e);
     }

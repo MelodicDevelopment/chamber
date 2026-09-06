@@ -1,10 +1,132 @@
-/* Chamber theme: obsidian + warm stone, flat brass accent, verdigris/ember status.
-   Overrides Melodic's dark preset on :root so applyTheme() keeps working. */
-:root,
-:root[data-theme='dark'],
-:root:not([data-theme='light']) {
+/* Chamber theme. Two looks that share one accent story:
+   - dark: obsidian + warm stone, flat brass accent (the default)
+   - light: warm stone / parchment, brass deepened for contrast
+   Both are --ml-* overrides so Melodic components pick them up; --ch-* are
+   Chamber-only tokens. `data-theme` on <html> is set by applyTheme(); light is
+   the base so the dark block can win on specificity. */
+
+:root {
 	--ml-font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	--ml-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	--ml-radius: 8px;
+	--ml-radius-md: 8px;
+	--ml-radius-lg: 12px;
+	--ml-radius-xl: 16px;
+
+	--ch-brass-ink: #1d1406;
+	--ch-brass-glow: rgba(224, 166, 75, 0.18);
+}
+
+/* ---- light: warm stone --------------------------------------------------- */
+:root,
+:root[data-theme='light'] {
+	color-scheme: light;
+
+	--ml-color-background: #f4efe6;
+	--ml-color-surface: #fbf8f2;
+	--ml-color-surface-raised: #ede6d9;
+	--ml-color-surface-overlay: #fbf8f2;
+	--ml-color-surface-sunken: #ece5d8;
+	--ml-color-input-bg: #fbf8f2;
+	--ml-color-input-disabled-bg: #ece5d8;
+	--ml-card-footer-bg: #ece5d8;
+
+	--ml-color-text: #1d1710;
+	--ml-color-text-secondary: #3d342a;
+	--ml-color-text-muted: #6b5f50;
+	--ml-color-text-subtle: #8f8375;
+	--ml-color-text-inverse: #fbf8f2;
+	--ml-color-text-link: #1f7a4f;
+	--ml-color-text-link-hover: #16643f;
+
+	--ml-color-border: rgba(60, 40, 10, 0.12);
+	--ml-color-border-strong: rgba(60, 40, 10, 0.22);
+	--ml-color-border-muted: rgba(60, 40, 10, 0.07);
+	--ml-color-border-focus: #a0711c;
+	--ml-color-focus-ring: #a0711c;
+
+	--ml-color-primary: #c9963a;
+	--ml-color-primary-hover: #ba8930;
+	--ml-color-primary-active: #a97a26;
+	--ml-color-primary-subtle: rgba(201, 150, 58, 0.16);
+	--ml-color-secondary: #6b5f50;
+	--ml-color-secondary-hover: #3d342a;
+	--ml-color-secondary-active: #1d1710;
+	--ml-color-secondary-subtle: #ede6d9;
+	--ml-color-success: #2e8f66;
+	--ml-color-success-hover: #257a56;
+	--ml-color-success-subtle: rgba(46, 143, 102, 0.14);
+	--ml-color-warning: #c4573f;
+	--ml-color-warning-hover: #b04a34;
+	--ml-color-warning-subtle: rgba(196, 87, 63, 0.12);
+	--ml-color-danger: #c4573f;
+	--ml-color-danger-hover: #b04a34;
+	--ml-color-danger-subtle: rgba(196, 87, 63, 0.12);
+	--ml-color-info: #1f7a4f;
+	--ml-color-info-subtle: rgba(46, 143, 102, 0.12);
+	--ml-color-toggle-off: #d9d0c1;
+	--ml-color-toggle-off-hover: #cbc0ae;
+	--ml-tooltip-bg: #1d1710;
+	--ml-tooltip-text: #fbf8f2;
+
+	--ml-shadow-ring-color: rgba(201, 150, 58, 0.22);
+	--ml-shadow-ring-error-color: rgba(196, 87, 63, 0.2);
+	--ml-shadow-ring-success-color: rgba(46, 143, 102, 0.2);
+	--ml-shadow-ring-gray-color: rgba(60, 40, 10, 0.1);
+	--ml-shadow-xs: 0 1px 2px 0 rgba(40, 30, 15, 0.08);
+	--ml-shadow-sm: 0 1px 3px 0 rgba(40, 30, 15, 0.1);
+	--ml-shadow-md: 0 4px 12px -2px rgba(40, 30, 15, 0.12);
+	--ml-shadow-lg: 0 12px 28px -8px rgba(40, 30, 15, 0.18);
+	--ml-shadow-xl: 0 18px 40px -18px rgba(40, 30, 15, 0.24);
+
+	--ml-badge-default-bg: #ede6d9;
+	--ml-badge-default-border: rgba(60, 40, 10, 0.14);
+	--ml-badge-default-text: #3d342a;
+	--ml-badge-primary-bg: rgba(201, 150, 58, 0.16);
+	--ml-badge-primary-border: rgba(160, 113, 28, 0.35);
+	--ml-badge-primary-text: #8a6116;
+	--ml-badge-success-bg: rgba(46, 143, 102, 0.14);
+	--ml-badge-success-border: rgba(46, 143, 102, 0.35);
+	--ml-badge-success-text: #1f7a4f;
+	--ml-badge-warning-bg: rgba(196, 87, 63, 0.12);
+	--ml-badge-warning-border: rgba(196, 87, 63, 0.35);
+	--ml-badge-warning-text: #a8452f;
+	--ml-badge-error-bg: rgba(196, 87, 63, 0.12);
+	--ml-badge-error-border: rgba(196, 87, 63, 0.35);
+	--ml-badge-error-text: #a8452f;
+
+	/* Chamber-only tokens */
+	--ch-brass: #a0711c;
+	--ch-verdigris: #2e8f66;
+	--ch-verdigris-light: #1f7a4f;
+	--ch-ember: #c4573f;
+	--ch-key: #7a5410;
+	--ch-string: #1f7a4f;
+	--ch-mask: #a09484;
+	--ch-dim: #7d7163;
+	--ch-glow-a: rgba(217, 166, 82, 0.28);
+	--ch-glow-b: rgba(79, 181, 138, 0.16);
+	--ch-glow-c: rgba(196, 87, 63, 0.1);
+	--ch-grid: rgba(60, 40, 10, 0.06);
+	--ch-glass: rgba(244, 239, 230, 0.74);
+	--ch-sidebar: #ede6d9;
+	--ch-popover: rgba(251, 248, 242, 0.98);
+	--ch-hover: rgba(60, 40, 10, 0.05);
+	--ch-hover-strong: rgba(60, 40, 10, 0.09);
+	--ch-chip-on: #e2d9c8;
+	--ch-code-bg: #faf7f1;
+	--ch-code-head: #efe8db;
+	--ch-scrim: rgba(244, 239, 230, 0.92);
+	--ch-hero: linear-gradient(165deg, #fbf8f2 0%, #f1ebe0 55%, #e6dece 100%);
+	--ch-card-glass: rgba(251, 248, 242, 0.82);
+	--ch-foot: rgba(60, 40, 10, 0.04);
+	--ch-well: rgba(60, 40, 10, 0.05);
+}
+
+/* ---- dark: obsidian (default) --------------------------------------------- */
+:root[data-theme='dark'] {
+	color-scheme: dark;
 
 	--ml-color-background: #0e0d0b;
 	--ml-color-surface: #161412;
@@ -79,25 +201,32 @@
 	--ml-badge-error-border: rgba(232, 120, 95, 0.35);
 	--ml-badge-error-text: #ef8d77;
 
-	--ml-radius: 8px;
-	--ml-radius-md: 8px;
-	--ml-radius-lg: 12px;
-	--ml-radius-xl: 16px;
-
 	/* Chamber-only tokens */
 	--ch-brass: #d9a652;
-	--ch-brass-ink: #1d1406;
 	--ch-verdigris: #4fb58a;
 	--ch-verdigris-light: #7fcba4;
 	--ch-ember: #e8785f;
 	--ch-key: #d9c08a;
 	--ch-string: #8fd3ae;
 	--ch-mask: #8a806f;
+	--ch-dim: #9a8f7c;
 	--ch-glow-a: rgba(224, 166, 75, 0.26);
 	--ch-glow-b: rgba(79, 181, 138, 0.14);
 	--ch-glow-c: rgba(140, 47, 57, 0.22);
 	--ch-grid: rgba(255, 228, 190, 0.045);
 	--ch-glass: rgba(14, 13, 11, 0.74);
+	--ch-sidebar: #121110;
+	--ch-popover: rgba(22, 20, 18, 0.97);
+	--ch-hover: rgba(255, 228, 190, 0.05);
+	--ch-hover-strong: rgba(255, 228, 190, 0.08);
+	--ch-chip-on: #29251f;
+	--ch-code-bg: #110f0d;
+	--ch-code-head: #1a1714;
+	--ch-scrim: rgba(14, 13, 11, 0.9);
+	--ch-hero: linear-gradient(165deg, #1e1a15 0%, #121110 55%, #0a0908 100%);
+	--ch-card-glass: rgba(22, 20, 18, 0.78);
+	--ch-foot: rgba(14, 13, 11, 0.4);
+	--ch-well: rgba(14, 13, 11, 0.5);
 }
 
 html,
@@ -124,7 +253,7 @@ ml-button {
 ml-button[variant='primary'] {
 	--ml-button-color: var(--ch-brass-ink);
 	--ml-button-hover-color: var(--ch-brass-ink);
-	--ml-button-shadow: 0 4px 16px rgba(224, 166, 75, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+	--ml-button-shadow: 0 4px 16px var(--ch-brass-glow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 ml-badge {
 	--ml-badge-font-weight: 500;

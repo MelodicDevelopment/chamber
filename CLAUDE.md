@@ -28,8 +28,8 @@ src/
   pages/welcome  first launch: key created, recovery kit, first chamber
   pages/vault    main window: sidebar, list, masked viewer, drag-drop, sync, keepers, history, settings dialogs
   pages/join     paste URL → auth ladder → clone
-  shared/        env parsing/masking, formatting, keyhole mark
-  styles/global.css   Chamber theme as --ml-* overrides on :root (linked with `melodic-styles`)
+  shared/        env parsing/masking, formatting, keyhole mark, theme.ts (appearance), pairing.ts (QR payload), qr-code + qr-scanner components
+  styles/global.css   Chamber theme: light tokens on :root, dark on :root[data-theme='dark'] (linked with `melodic-styles`)
 vite-plugin-melodic-styles.ts   copied from kingdom; required so --ml-* tokens reach shadow roots
 ```
 
@@ -43,12 +43,15 @@ Chamber repo layout (what gets committed): `vault/**.age`, `.chamber/recipients`
 - Removing a keeper rekeys everything and returns the list of secrets they could read, for rotation prompts.
 - Reveal is per-value for 30 s; copied secrets are cleared from the clipboard after 30 s.
 - Auth ladder: SSH agent → git's own credential helpers → Git Credential Manager (browser sign-in; covers GitHub, Bitbucket Cloud, Azure DevOps, GitLab) → pasted token. Tokens go in the keystore and are fed to git via a GIT_ASKPASS script with `credential.helper=` cleared for that call. Never write tokens to disk or argv.
+- GCM: `auth::gcm_helper()` finds `manager`/`manager-core`; if the user's git config does not already route through GCM, `env_for` adds it as a helper for that call only. Every git call takes an `auth::Prompt`: `Silent` sets `GCM_INTERACTIVE=never` and is the default for `open_chamber` (status polls, local ops); only `sync_now`, `sync_resolve`, `chamber_create`/`chamber_join` and `auth_check` are `Interactive`. A background fetch must never open a browser. On Linux `GCM_CREDENTIAL_STORE=secretservice` is set when nothing is configured. Missing GCM shows platform install guidance (`HostInfo.gcmInstall`) with a Check again button on the Join page.
+- QR pairing carries only `<age public key> <label>` (one recipients line). Never encode the private key; the recovery kit is the only export path. The scanner (`chamber-qr-scanner`) uses the platform BarcodeDetector when present, jsQR otherwise; the camera stops when the Scan dialog closes. macOS needs `NSCameraUsageDescription` (src-tauri/Info.plist).
 - CSP is `default-src 'self'`; fonts are bundled via @fontsource, not Google Fonts.
 
 ## Conventions
 
 - Melodic 3-file component pattern for big pages (component/template/styles), single-file for small ones. `@Service()` for DI, `@ml:click`/`@ml:input` for Melodic events, `@click` for native. Components self-register on import; add new ones to `src/components.ts`.
 - Never import `@tauri-apps/*` at module top level in files the browser preview loads; `backend.service.ts` lazy-imports inside `isDesktop()`.
+- Theme: no hard-coded colors in component styles. Use `--ml-*` or the Chamber tokens in global.css (`--ch-brass`, `--ch-hover`, `--ch-popover`, `--ch-code-bg`, `--ch-hero`, `--ch-card-glass`, ...); every `--ch-*` has a light and a dark value. Appearance (system/light/dark) is in Settings; stored in localStorage as `chamber.theme`, default dark. `setTheme()` also sets the native window theme.
 - Rust errors are `AppError` → serialized as `{kind, message, paths}`; `kind` ∈ conflict | auth | git | locked | keychain | error. The UI branches on `kind`.
 - Dialog-opening Tauri commands must be `async` (blocking dialogs on the main thread wedge the app).
 - Commits: author as Rick only. No AI attribution trailers.
@@ -73,4 +76,5 @@ npm run icon            # regenerate icons from icon-source.svg (keep the ~10% m
 
 Done: scaffold compiles and launches; welcome → create chamber → drop files → masked viewer → sync/conflict UI → keepers/history/settings dialogs → join flow with auth ladder.
 Folders: `+` opens New folder with the selected folder preselected as the location; right-click / ⋯ on a sidebar folder → New folder inside, Rename (leaf only), Move to…, Delete (keep secrets and move them up, or delete all). Drag rows or folders onto folders (pointer events, since Tauri's dragDropEnabled breaks HTML5 DnD); dragging a folder onto the top/bottom quarter of another folder row reorders it (and re-parents if the rows are not siblings). The New folder dialog has a location picker; clicking the open folder again returns to All secrets. Backend: `secrets_move` renames ciphertext only (no re-encrypt); `secrets_remove` deletes many in one commit. Dialogs are `<ml-dialog #name>` opened via DialogService, never `el.open()`.
-Not yet verified end to end on a real remote. Open items: CI/release workflow (tauri-action), Windows/Linux smoke test, GCM install guidance in-app, encrypted filenames (optional), light theme, QR device pairing.
+GCM guidance, light theme and QR pairing landed 2026-09-06 (branch feat/gcm-light-qr): Join page installs/rechecks GCM; Settings has Appearance; the locked panel, Join page and Settings show this device's QR; Keepers → Scan from another device reads it with the webcam and fills the add-keeper fields. Verified in the browser preview (screenshots, QR encode→decode roundtrip); the webcam scan and the GCM browser sign-in are not yet exercised on the desktop build.
+Not yet verified end to end on a real remote. Open items: CI/release workflow (tauri-action), Windows/Linux smoke test, encrypted filenames (optional), real-device test of QR scan + GCM sign-in.

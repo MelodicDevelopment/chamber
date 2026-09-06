@@ -13,6 +13,8 @@ import './services/backend.service';
 
 // App components
 import './shared/keyhole-mark.component';
+import './shared/qr-code.component';
+import './shared/qr-scanner.component';
 import './components/app/app.component';
 import './pages/welcome/welcome-page.component';
 import './pages/vault/vault-page.component';

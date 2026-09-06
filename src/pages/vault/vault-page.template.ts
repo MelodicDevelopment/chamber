@@ -108,11 +108,17 @@ export function vaultPageTemplate(self: VaultPage) {
 						<div class="locked grow">
 							<chamber-mark size="48"></chamber-mark>
 							<div class="big">Waiting for a keeper to let you in</div>
-							<div style="color: var(--ml-color-text-muted); font-size: 13px; max-width: 460px;">This chamber has ${c.keepers} keeper${c.keepers === 1 ? '' : 's'}. Send one of them your public key. Once they add it and sync, this unlocks on its own.</div>
-							<div class="key">${self.status?.publicKey ?? ''}</div>
-							<div style="display:flex; gap:8px">
-								<ml-button variant="primary" size="sm" @ml:click=${() => self.copy(self.status?.publicKey ?? '', 'Public key copied')}><ml-icon slot="icon-start" icon="copy"></ml-icon>Copy public key</ml-button>
-								<ml-button variant="outline" size="sm" ?loading=${self.syncing} @ml:click=${() => self.syncNow()}>Check again</ml-button>
+							<div class="lede">This chamber has ${c.keepers} keeper${c.keepers === 1 ? '' : 's'}. Let one of them scan this code, or send them your public key. Once they add it and sync, this unlocks on its own.</div>
+							<div class="pair">
+								<chamber-qr value=${self.pairing} size="168"></chamber-qr>
+								<div class="side">
+									<div class="key">${self.status?.publicKey ?? ''}</div>
+									<div class="fine">They scan it from <b>Keepers → Scan from another device</b>. Only your public key is in the code; your private key stays in this computer's keychain.</div>
+									<div class="btns">
+										<ml-button variant="primary" size="sm" @ml:click=${() => self.copy(self.status?.publicKey ?? '', 'Public key copied')}><ml-icon slot="icon-start" icon="copy"></ml-icon>Copy public key</ml-button>
+										<ml-button variant="outline" size="sm" ?loading=${self.syncing} @ml:click=${() => self.syncNow()}>Check again</ml-button>
+									</div>
+								</div>
 							</div>
 						</div>` : html`
 						<div class="list">
@@ -337,8 +343,21 @@ export function vaultPageTemplate(self: VaultPage) {
 					</div>`)}
 				<ml-input label="Add a keeper" placeholder="age1…" .value=${self.newKeeperKey} @ml:input=${(e: CustomEvent) => (self.newKeeperKey = e.detail.value)}></ml-input>
 				<ml-input placeholder="Label, like “Sam (laptop)”" .value=${self.newKeeperLabel} @ml:input=${(e: CustomEvent) => (self.newKeeperLabel = e.detail.value)}></ml-input>
+				<div class="scanrow">
+					<ml-button variant="outline" size="sm" @ml:click=${() => self.startScan()}><ml-icon slot="icon-start" icon="qr-code"></ml-icon>Scan from another device</ml-button>
+					<span class="fineprint">The other device shows its code while it waits to be let in, and under Settings.</span>
+				</div>
 			</div>
 			<div slot="dialog-footer"><ml-button variant="outline" @ml:click=${() => self.closeDialog('keepers')}>Close</ml-button><ml-button variant="primary" ?disabled=${!self.newKeeperKey.trim().startsWith('age1')} ?loading=${self.busy === 'keeper'} @ml:click=${() => self.addKeeper()}>Add and rekey</ml-button></div>
+		</ml-dialog>
+
+		<ml-dialog #scan id="scan" size="sm" @ml:close=${() => self.stopScan()}>
+			<h3 slot="dialog-header">Scan a device</h3>
+			<div class="dlg">
+				<p>Hold the other device's QR code up to this camera. The code carries only its public key and a label.</p>
+				${self.scanning ? html`<chamber-qr-scanner @ml:scan=${(e: CustomEvent) => self.onScan(e.detail.text)}></chamber-qr-scanner>` : ''}
+			</div>
+			<div slot="dialog-footer"><ml-button variant="outline" @ml:click=${() => self.closeDialog('scan')}>Cancel</ml-button></div>
 		</ml-dialog>
 
 		<ml-dialog #history id="history" size="md">
@@ -388,9 +407,19 @@ export function vaultPageTemplate(self: VaultPage) {
 		<ml-dialog #settings id="settings" size="md">
 			<h3 slot="dialog-header">Settings</h3>
 			<div class="dlg">
-				<p><b>Your public key</b></p>
-				<div class="mono" style="font-size:12px; word-break: break-all; user-select: text">${self.status?.publicKey ?? ''}</div>
-				<div><ml-button size="sm" variant="outline" @ml:click=${() => self.copy(self.status?.publicKey ?? '', 'Public key copied')}>Copy</ml-button></div>
+				<p><b>Appearance</b></p>
+				<div class="seg">
+					${(['system', 'light', 'dark'] as const).map((m) => html`<span class="chip btn ${self.theme === m ? 'on' : ''}" @click=${() => self.pickTheme(m)}><ml-icon icon=${m === 'system' ? 'desktop' : m === 'light' ? 'sun' : 'moon'} size="xs"></ml-icon>${m === 'system' ? 'Match system' : m === 'light' ? 'Light' : 'Dark'}</span>`)}
+				</div>
+				<p style="margin-top: 8px"><b>Your public key</b></p>
+				<div class="pair compact">
+					<chamber-qr value=${self.pairing} size="112"></chamber-qr>
+					<div class="side grow">
+						<div class="mono" style="font-size:12px; word-break: break-all; user-select: text">${self.status?.publicKey ?? ''}</div>
+						<div class="fine">Another keeper scans this to add this device to their chamber.</div>
+						<div><ml-button size="sm" variant="outline" @ml:click=${() => self.copy(self.status?.publicKey ?? '', 'Public key copied')}>Copy</ml-button></div>
+					</div>
+				</div>
 				<p style="margin-top: 8px"><b>Recovery kit</b> · ${self.status?.recoverySaved ? 'saved' : 'not saved yet'}</p>
 				<div style="display:flex; gap:8px">
 					<ml-input type="password" placeholder="Passphrase (8+ characters)" .value=${self.kitPassphrase} @ml:input=${(e: CustomEvent) => (self.kitPassphrase = e.detail.value)}></ml-input>
