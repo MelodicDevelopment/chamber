@@ -122,11 +122,13 @@ export function vaultPageStyles() {
 
 		/* ---- detail ---- */
 		.detail { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-		.detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px 16px; }
-		.detail-head .title { font-size: 20px; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; word-break: break-all; user-select: text; }
+		/* Name and tags on top, the toolbar beneath: the pane is too narrow for both side by side once four buttons are in it. */
+		.detail-head { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px 16px; }
+		.detail-head .title { font-size: 20px; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; overflow-wrap: anywhere; user-select: text; }
 		.detail-head .tags { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--ml-color-text-subtle); flex-wrap: wrap; }
 		.detail-head .tags .chip { height: 22px; padding: 0 9px; font-size: 11px; }
-		.actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+		.actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+		.actions > ml-button:last-child { margin-left: auto; }
 		.strip { display: flex; align-items: center; gap: 10px; margin: 0 20px 12px; padding: 9px 12px; border-radius: 10px; background: rgba(232, 120, 95, 0.1); border: 1px solid rgba(232, 120, 95, 0.3); font-size: 13px; }
 		.strip ml-icon { color: var(--ch-ember); }
 		.strip a { color: var(--ch-ember); font-weight: 600; cursor: pointer; }
