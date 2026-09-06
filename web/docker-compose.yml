@@ -1,0 +1,26 @@
+# Serve the Chamber marketing site locally.
+#
+#   docker compose -f web/docker-compose.yml up -d
+#   open http://localhost:8931
+#
+# The site is static, so web/ is bind-mounted read-only into nginx: edit a file,
+# refresh the browser. No build step. If Envy is running it also lists
+# "chamber-web" with an https URL, courtesy of the envy.port label.
+#
+# Explicit project name — without it, compose uses the directory name ("web"),
+# which collides with every other product's web/ compose project.
+name: chamber-web
+
+services:
+  web:
+    image: nginx:1.27-alpine
+    container_name: chamber-web
+    volumes:
+      - .:/usr/share/nginx/html:ro
+    ports:
+      # host:container — 8931 on the host so it does not collide with envy-web (8930)
+      # or the usual 8080 suspects.
+      - "8931:80"
+    labels:
+      envy.port: "80"
+    restart: unless-stopped

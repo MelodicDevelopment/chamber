@@ -29,6 +29,7 @@ jobs:
                     mirror --reverse --delete --verbose \
                       --exclude .git/ \
                       --exclude .github/ \
+                      --exclude docker-compose.yml \
                       ./web/ /;
                     bye
                   "
