@@ -21,7 +21,7 @@ Requires Rust (stable), Node 22+, and `git` on the PATH at runtime. Git Credenti
 
 ## Website
 
-`web/` is the static marketing site at chamber.melodic.dev, served by nginx from `web/Dockerfile` on Railway (project `chamber`, service `chamber`). Pushes to `main` that touch `web/` deploy it through `.github/workflows/deploy-website.yml` (needs the `RAILWAY_TOKEN` secret); `railway up` from `web/` deploys by hand. `web/screenshot.png` is the hero image; retake it from the browser demo when the UI changes. To view it locally: `docker compose -f web/docker-compose.yml up -d` and open http://localhost:8931.
+`web/` is the static marketing site at chamber.melodic.dev, served by nginx from `web/Dockerfile` on Railway (project `chamber`, service `chamber`). Railway is connected to the GitHub repo with Root Directory `web`, so pushes to `main` that touch `web/` redeploy it; `railway up` from `web/` deploys by hand. `web/screenshot.png` is the hero image; retake it from the browser demo when the UI changes. To view it locally: `docker compose -f web/docker-compose.yml up -d` and open http://localhost:8931.
 
 ## Release
 

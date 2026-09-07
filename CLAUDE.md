@@ -33,7 +33,7 @@ src/
 vite-plugin-melodic-styles.ts   copied from kingdom; required so --ml-* tokens reach shadow roots
 web/                  static marketing site (chamber.melodic.dev): nginx Dockerfile on Railway (project+service `chamber`, DNS at GoDaddy), docker-compose for local, og.png/sitemap/robots/404 for SEO. railway.toml is the deprecated CaC format; the migrate tool drops watchPatterns, so keep it until Railway forces the move (2026-12-01).
 scripts/sign-windows.mjs   Windows Authenticode via Azure Trusted Signing, called by bundle.windows.signCommand
-.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed builds → notes from commit subjects → published; latest.json for the in-app updater), deploy-website.yml (web/ → Railway via RAILWAY_TOKEN)
+.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed builds → notes from commit subjects → published; latest.json for the in-app updater). The site deploys from Railway's own GitHub connection (Root Directory `web`), not from Actions
 docs/release.md       signing/notarization setup + per-release checklist
 ```
 

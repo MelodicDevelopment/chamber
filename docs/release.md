@@ -124,7 +124,7 @@ The site deploys separately from the app. `web/` is built from its Dockerfile on
 - DNS: a `CNAME chamber` record pointing at the Railway target plus a `TXT _railway-verify.chamber`
   record. `railway domain status chamber.melodic.dev` from `web/` prints both values and reports
   when the certificate is issued.
-- Automatic deploys: `.github/workflows/deploy-website.yml` runs `railway up` on pushes to
-  `main` that touch `web/`. It needs a `RAILWAY_TOKEN` repository secret (Railway dashboard →
-  chamber → Settings → Tokens → project token).
+- Automatic deploys: the Railway service is connected to the GitHub repo with Root Directory
+  `web` and "Wait for CI" on, so pushes to `main` that touch `web/` rebuild `web/Dockerfile`
+  once ci.yml passes. There is no GitHub Actions deploy step.
 - Manual deploy: `cd web && railway up`.
