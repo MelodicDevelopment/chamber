@@ -44,6 +44,44 @@ export interface AppStatus {
 	current: string | null;
 	appVersion: string;
 }
+/** An account a repository can be created under on a host. */
+export interface Owner {
+	login: string;
+	kind: 'user' | 'org';
+}
+export interface HostAccount {
+	host: string;
+	provider: string;
+	providerName: string;
+	/** Whether Chamber can create repositories on this host at all. */
+	supported: boolean;
+	connected: boolean;
+	login: string | null;
+	owners: Owner[];
+	/** Why we are not connected, or why the sign-in we found is not enough. */
+	note: string | null;
+	tokenPage: string | null;
+	/** Whether this build has a GitHub OAuth app, so the browser sign-in works. */
+	canSignIn: boolean;
+	/** We hold a credential the host rejected; offer to clear it. */
+	staleCredential: boolean;
+}
+/** A browser sign-in waiting on the user to approve a code. */
+export interface DeviceCode {
+	userCode: string;
+	verificationUri: string;
+	deviceCode: string;
+	interval: number;
+	expiresIn: number;
+}
+export interface NewRepo {
+	fullName: string;
+	sshUrl: string;
+	httpsUrl: string;
+	htmlUrl: string;
+	/** The one to use as this machine's remote (SSH only when a key is loaded). */
+	remoteUrl: string;
+}
 export interface Entry {
 	path: string;
 	size: number;
@@ -127,7 +165,8 @@ export class BackendService {
 	exportRecoveryKit(passphrase: string, saveTo?: string) { return this.call<string>('recovery_kit_export', { passphrase, saveTo: saveTo ?? null }); }
 	importRecoveryKit(kit: string, passphrase: string) { return this.call<string>('recovery_kit_import', { kit, passphrase }); }
 	markRecoverySaved() { return this.call<void>('recovery_mark_saved'); }
-	createChamber(name: string, remote?: string) { return this.call<ChamberSummary>('chamber_create', { name, remote: remote ?? null }); }
+	createChamber(name: string) { return this.call<ChamberSummary>('chamber_create', { name }); }
+	attachRemote(chamberId: string, url: string) { return this.call<ChamberSummary>('chamber_attach_remote', { chamberId, url }); }
 	joinChamber(url: string, name?: string) { return this.call<ChamberSummary>('chamber_join', { url, name: name ?? null }); }
 	selectChamber(id: string) { return this.call<void>('chamber_select', { id }); }
 	setFolders(id: string, folders: string[]) { return this.call<void>('chamber_set_folders', { id, folders }); }
@@ -150,6 +189,13 @@ export class BackendService {
 	detectHost(url: string) { return this.call<HostInfo>('auth_detect', { url }); }
 	checkAuth(url: string) { return this.call<void>('auth_check', { url }); }
 	storeToken(url: string, token: string, username?: string) { return this.call<void>('auth_store_token', { url, token, username: username ?? null }); }
+	hostAccount(host: string, connect = false) { return this.call<HostAccount>('host_account', { host, connect }); }
+	createRepo(host: string, owner: string, name: string, isPrivate: boolean) { return this.call<NewRepo>('host_create_repo', { host, owner, name, private: isPrivate }); }
+	disconnectHost(host: string) { return this.call<void>('host_disconnect', { host }); }
+	signInStart() { return this.call<DeviceCode>('host_sign_in_start'); }
+	signInWait(host: string, code: DeviceCode) { return this.call<HostAccount>('host_sign_in_wait', { host, code }); }
+	signInCancel() { return this.call<void>('host_sign_in_cancel'); }
+	storeHostToken(host: string, token: string) { return this.call<HostAccount>('host_store_token', { host, token }); }
 	pickFiles() { return this.call<string[] | null>('pick_files'); }
 	pickFolder() { return this.call<string | null>('pick_folder'); }
 	pickSavePath(suggested: string) { return this.call<string | null>('pick_save_path', { suggested }); }
@@ -173,6 +219,8 @@ class DemoBackend {
 	]);
 	private sealedAt = new Map<string, string>();
 	private recoverySaved = false;
+	/** Flipped by a "connect" call so the preview can show both sides of the dialog. */
+	private connectedHost = false;
 
 	async call<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
 		const now = new Date().toISOString();
@@ -217,6 +265,22 @@ class DemoBackend {
 				const isSsh = url.startsWith('git@') || url.startsWith('ssh://');
 				return { url, host: 'github.com', provider: 'github', providerName: 'GitHub', isSsh, sshUrl: isSsh ? null : 'git@github.com:you/secrets.git', httpsUrl: null, tokenPage: 'https://github.com/settings/personal-access-tokens/new', tokenScope: 'Contents: read and write', tokenUsername: 'x-access-token', sshKeyAvailable: true, credentialCached: false, gcmAvailable: false, tokenStored: false, gcmInstall: DEMO_GCM } as T;
 			}
+			case 'host_account': {
+				if (args.connect) this.connectedHost = true;
+				const connected = this.connectedHost;
+				return { host: args.host, provider: 'github', providerName: 'GitHub', supported: true, connected, login: connected ? 'you' : null, owners: connected ? [{ login: 'you', kind: 'user' }, { login: 'melodic-dev', kind: 'org' }] : [], note: null, tokenPage: 'https://github.com/settings/tokens/new?scopes=repo', canSignIn: true, staleCredential: false } as T;
+			}
+			case 'host_sign_in_start': return { userCode: 'WDJB-MJHT', verificationUri: 'https://github.com/login/device', deviceCode: 'demo', interval: 1, expiresIn: 900 } as T;
+			case 'host_sign_in_wait': case 'host_store_token':
+				this.connectedHost = true;
+				return this.call<T>('host_account', { host: args.host });
+			case 'host_sign_in_cancel': return undefined as T;
+			case 'host_create_repo': {
+				const full = `${args.owner}/${args.name}`;
+				return { fullName: full, sshUrl: `git@github.com:${full}.git`, httpsUrl: `https://github.com/${full}.git`, htmlUrl: `https://github.com/${full}`, remoteUrl: `https://github.com/${full}.git` } as T;
+			}
+			case 'host_disconnect': this.connectedHost = false; return undefined as T;
+			case 'chamber_create': case 'chamber_attach_remote': return undefined as T;
 			case 'copy_text': try { await navigator.clipboard.writeText(String(args.text)); } catch { /* browser preview */ } return undefined as T;
 			case 'open_url': window.open(String(args.url), '_blank'); return undefined as T;
 			case 'pick_files': case 'pick_folder': case 'pick_save_path': return null as T;

@@ -5,7 +5,7 @@ import { ToastService, DialogService } from '@melodicdev/components';
 import { vaultPageTemplate } from './vault-page.template';
 import { vaultPageStyles } from './vault-page.styles';
 import { UpdatesService, type StagedUpdate } from '../../services/updates.service';
-import { BackendService, asAppError, isDesktop, type AppStatus, type ChamberSummary, type Entry, type SecretContent, type SyncStatus, type LogEntry, type Recipient } from '../../services/backend.service';
+import { BackendService, asAppError, isDesktop, type AppStatus, type ChamberSummary, type Entry, type SecretContent, type SyncStatus, type LogEntry, type Recipient, type HostAccount, type DeviceCode } from '../../services/backend.service';
 import { parseEnv, looksLikeEnv, mask, type EnvLine } from '../../shared/env';
 import { kindOf, roomOf, fileName, normalizeFolder } from '../../shared/format';
 import { savedTheme, setTheme, type ThemeMode } from '../../shared/theme';
@@ -81,7 +81,7 @@ export class VaultPage {
 	private _dragStart: { x: number; y: number; path: string; kind: 'secret' | 'folder' } | null = null;
 	private _didDrag = false;
 
-	busy: '' | 'create' | 'keeper' | 'edit' | 'delete' | 'kit' | 'folder' | 'move' | 'add' = '';
+	busy: '' | 'create' | 'keeper' | 'edit' | 'delete' | 'kit' | 'folder' | 'move' | 'add' | 'connect' = '';
 	newName = '';
 	addName = '';
 	addValue = '';
@@ -91,6 +91,23 @@ export class VaultPage {
 	moveNewFolder = '';
 	folderMoveTarget = '';
 	newRemote = '';
+	// ---- New chamber: where it lives ----
+	/** 'local' keeps it on this computer; 'remote' pushes it to a git repository. */
+	newWhere: 'local' | 'remote' = 'local';
+	/** Within 'remote': let Chamber make the repo, or point at one that exists. */
+	newRepoMode: 'create' | 'url' = 'create';
+	newRepoName = '';
+	newRepoPrivate = true;
+	newRepoOwner = '';
+	/** Whether the name field has been edited by hand, so we stop tracking it. */
+	private _repoNameTouched = false;
+	/** The GitHub sign-in Chamber can see, for the New chamber dialog. */
+	gitHost: HostAccount | null = null;
+	/** The code the user is approving in a browser, while we wait on it. */
+	signIn: DeviceCode | null = null;
+	/** Shown when the browser sign-in is not an option, or the user prefers a token. */
+	showTokenField = false;
+	hostToken = '';
 	newKeeperKey = '';
 	newKeeperLabel = '';
 	editText = '';
@@ -588,15 +605,163 @@ export class VaultPage {
 
 	// ---- chambers + keepers -----------------------------------------------------
 
+	openNewChamber() {
+		this.newName = this.newRemote = this.newRepoName = '';
+		this.newWhere = 'local';
+		this.newRepoMode = 'create';
+		this.newRepoPrivate = true;
+		this._repoNameTouched = false;
+		this.gitHost = null;
+		this.signIn = null;
+		this.showTokenField = false;
+		this.hostToken = '';
+		this.openDialog('new-chamber');
+	}
+
+	/**
+	 * Only ever on an explicit Connect. Finding out who you are means using a
+	 * GitHub credential and asking the API for the account behind it — not
+	 * something to do because a dialog opened.
+	 *
+	 * The rungs, cheapest first: a credential git already holds on this computer,
+	 * then the browser sign-in, then a pasted token. Each one that fails explains
+	 * itself and offers the next.
+	 */
+	async connectHost() {
+		this.busy = 'connect';
+		try {
+			const held = await this.backend.hostAccount('github.com', true);
+			if (held.connected) return this.signedIn(held);
+			this.gitHost = held;
+			if (held.staleCredential) {
+				this.toast.warning('That sign-in was refused', `${held.note ?? 'GitHub would not accept it.'} Clear it and try again.`);
+				return;
+			}
+			if (!held.canSignIn) {
+				this.showTokenField = true;
+				this.toast.warning('No browser sign-in here', 'Paste a token instead, or use a repository URL.');
+				return;
+			}
+			await this.browserSignIn();
+		} catch (e) {
+			this.toast.error('Could not connect', asAppError(e).message);
+		} finally {
+			this.busy = '';
+		}
+	}
+
+	/** The device flow: show a code, open GitHub, wait for approval. */
+	private async browserSignIn() {
+		this.signIn = await this.backend.signInStart();
+		await this.backend.openUrl(this.signIn.verificationUri);
+		try {
+			this.signedIn(await this.backend.signInWait('github.com', this.signIn));
+		} catch (e) {
+			this.showTokenField = true;
+			this.toast.warning('Not signed in', `${asAppError(e).message}. You can paste a token instead.`);
+		} finally {
+			this.signIn = null;
+		}
+	}
+
+	cancelSignIn() {
+		this.backend.signInCancel();
+		this.signIn = null;
+		this.busy = '';
+	}
+
+	async useToken() {
+		this.busy = 'connect';
+		try {
+			this.signedIn(await this.backend.storeHostToken('github.com', this.hostToken.trim()));
+			this.hostToken = '';
+			this.showTokenField = false;
+		} catch (e) {
+			this.toast.error('That token did not work', asAppError(e).message);
+		} finally {
+			this.busy = '';
+		}
+	}
+
+	private signedIn(account: HostAccount) {
+		this.gitHost = account;
+		this.newRepoOwner = account.login ?? '';
+		this.toast.success('Connected to GitHub', `Signed in as ${account.login}.`);
+	}
+
+	async disconnectHost() {
+		try {
+			await this.backend.disconnectHost('github.com');
+		} finally {
+			this.gitHost = null;
+			this.showTokenField = false;
+			this.hostToken = '';
+		}
+	}
+
+	/** Guidance for installing Git Credential Manager, when that is the gap. */
+	get gcmInstall() {
+		return this.status?.gcmInstall ?? null;
+	}
+
+	/** The repository name follows the chamber name until the user edits it. */
+	setNewName(value: string) {
+		this.newName = value;
+		if (!this._repoNameTouched) this.newRepoName = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+	}
+
+	setRepoName(value: string) {
+		this._repoNameTouched = true;
+		this.newRepoName = value;
+	}
+
+	/** Open github.com/new with the fields already filled, for anyone who would rather not connect. */
+	newRepoOnGitHub() {
+		const name = encodeURIComponent(this.newRepoName || 'secrets');
+		this.backend.openUrl(`https://github.com/new?name=${name}&visibility=${this.newRepoPrivate ? 'private' : 'public'}`);
+	}
+
+	/** Accounts a repository could go under, for the owner dropdown. */
+	get ownerOptions() {
+		return (this.gitHost?.owners ?? []).map((o) => ({ value: o.login, label: o.kind === 'org' ? `${o.login} (org)` : o.login, icon: o.kind === 'org' ? 'buildings' : 'user' }));
+	}
+
+	get canCreateChamber(): boolean {
+		if (!this.newName.trim()) return false;
+		if (this.newWhere === 'local') return true;
+		return this.newRepoMode === 'url' ? !!this.newRemote.trim() : !!(this.gitHost?.connected && this.newRepoName.trim() && this.newRepoOwner);
+	}
+
+	/**
+	 * The chamber is made locally first and everything else is best-effort: a
+	 * repository that cannot be made, or a URL that turns out to be wrong, costs
+	 * the user a retry from Settings rather than the chamber itself.
+	 */
 	async createChamber() {
 		this.busy = 'create';
+		const wantsRemote = this.newWhere === 'remote';
 		try {
-			await this.backend.createChamber(this.newName.trim(), this.newRemote.trim() || undefined);
+			const chamber = await this.backend.createChamber(this.newName.trim());
 			this.closeDialog('new-chamber');
-			this.newName = this.newRemote = '';
 			this.clearSelection();
+			try {
+				let url = this.newRepoMode === 'url' ? this.newRemote.trim() : '';
+				if (wantsRemote && this.newRepoMode === 'create') {
+					const repo = await this.backend.createRepo('github.com', this.newRepoOwner, this.newRepoName.trim(), this.newRepoPrivate);
+					url = repo.remoteUrl;
+				}
+				if (!wantsRemote || !url) {
+					this.toast.success('Chamber created', 'On this computer only. You can connect a repository any time.');
+				} else {
+					await this.backend.attachRemote(chamber.id, url);
+					this.toast.success('Chamber created', 'Sealed, committed and pushed.');
+				}
+			} catch (e) {
+				this.toast.warning('Chamber created, but not synced', `${asAppError(e).message} — it is safe on this computer; connect the repository from Settings.`);
+			}
+			this.newName = this.newRemote = this.newRepoName = '';
+			this._repoNameTouched = false;
 			await this.refresh();
-			this.toast.success('Chamber created');
 		} catch (e) {
 			this.toast.error('Could not create', asAppError(e).message);
 		} finally {

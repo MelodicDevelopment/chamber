@@ -1,6 +1,7 @@
 //! The auth ladder: SSH agent → existing git credentials → Git Credential
 //! Manager (browser sign-in) → a pasted token kept in the OS keystore.
-//! We never talk to a host's API; git does, using whichever rung applies.
+//! Git does the talking, using whichever rung applies; `hosting` borrows the
+//! same credential for the one thing git cannot do, creating a repository.
 
 use crate::error::{AppError, Result};
 use crate::git::Git;
@@ -206,25 +207,105 @@ fn gcm_configured() -> bool {
         .unwrap_or(false)
 }
 
-/// Ask git's configured helpers for a credential without letting them prompt.
-pub fn credential_cached(host: &str) -> bool {
+/// Environment that lets Git Credential Manager run for one call, without
+/// touching the user's own config. Shared by `env_for` and `credential_fill`.
+fn gcm_env(prompt: Prompt) -> Vec<(String, String)> {
+    let mut env: Vec<(String, String)> = vec![];
+    if prompt == Prompt::Silent {
+        env.push(("GCM_INTERACTIVE".into(), "never".into()));
+    }
+    if let Some(helper) = gcm_helper() {
+        if !gcm_configured() {
+            env.push(("GIT_CONFIG_COUNT".into(), "1".into()));
+            env.push(("GIT_CONFIG_KEY_0".into(), "credential.helper".into()));
+            env.push(("GIT_CONFIG_VALUE_0".into(), helper.into()));
+        }
+        // GCM on Linux refuses to run until a credential store is chosen; default to the desktop keyring.
+        #[cfg(all(unix, not(target_os = "macos")))]
+        if std::env::var_os("GCM_CREDENTIAL_STORE").is_none() {
+            let configured = Command::new("git").args(["config", "--get", "credential.credentialStore"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).output().map(|o| !o.stdout.is_empty()).unwrap_or(false);
+            if !configured {
+                env.push(("GCM_CREDENTIAL_STORE".into(), "secretservice".into()));
+            }
+        }
+    }
+    env
+}
+
+/// Ask git's own helpers for the credential they hold for `host`. `Silent`
+/// forbids any prompting, so it answers "is one already cached?"; `Interactive`
+/// lets Git Credential Manager open the browser sign-in to get one.
+pub fn credential_fill(host: &str, prompt: Prompt) -> Option<(String, String)> {
     use std::io::Write;
-    let Ok(mut child) = Command::new("git")
-        .args(["credential", "fill"])
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GCM_INTERACTIVE", "never")
-        .env("GIT_ASKPASS", "true")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
-        return false;
+    let mut c = Command::new("git");
+    c.args(["credential", "fill"]).env("GIT_TERMINAL_PROMPT", "0");
+    if prompt == Prompt::Silent {
+        c.env("GIT_ASKPASS", "true"); // never fall back to asking us for it
+    }
+    for (k, v) in gcm_env(prompt) {
+        c.env(k, v);
+    }
+    let Ok(mut child) = c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
+        return None;
     };
     if let Some(mut stdin) = child.stdin.take() {
         let _ = write!(stdin, "protocol=https\nhost={host}\n\n");
     }
-    child.wait_with_output().map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("password=")).unwrap_or(false)
+    // A helper that decides to wait on something (a browser tab nobody will
+    // open, a locked keyring) must not hang the caller forever.
+    let deadline = std::time::Instant::now() + if prompt == Prompt::Silent { std::time::Duration::from_secs(10) } else { std::time::Duration::from_secs(180) };
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Ok(None) => {
+                let _ = child.kill();
+                return None;
+            }
+            Err(_) => return None,
+        }
+    }
+    let out = child.wait_with_output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let field = |k: &str| text.lines().find_map(|l| l.strip_prefix(k).map(str::to_string));
+    let secret = field("password=")?;
+    Some((field("username=").unwrap_or_else(|| "x-access-token".into()), secret))
+}
+
+/// Ask git's configured helpers for a credential without letting them prompt.
+pub fn credential_cached(host: &str) -> bool {
+    credential_fill(host, Prompt::Silent).is_some()
+}
+
+/// A credential Chamber can use against a host's HTTP API. Same ladder git
+/// climbs: a token the user gave us, else whatever Git Credential Manager
+/// already holds (or, when `Interactive`, will fetch by browser sign-in).
+pub fn api_token(host: &str, prompt: Prompt) -> Result<Option<(String, String)>> {
+    if let Some(pair) = token(host)? {
+        return Ok(Some(pair));
+    }
+    Ok(credential_fill(host, prompt))
+}
+
+/// Drop everything we hold for `host`: our own token and the helpers' copy.
+pub fn credential_forget(host: &str) -> Result<()> {
+    use std::io::Write;
+    forget_token(host)?;
+    let mut c = Command::new("git");
+    c.args(["credential", "reject"]).env("GIT_TERMINAL_PROMPT", "0");
+    for (k, v) in gcm_env(Prompt::Silent) {
+        c.env(k, v);
+    }
+    if let Ok(mut child) = c.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = write!(stdin, "protocol=https\nhost={host}\n\n");
+        }
+        let _ = child.wait();
+    }
+    Ok(())
 }
 
 // ---- tokens in the OS keystore -------------------------------------------
@@ -272,26 +353,7 @@ pub fn env_for(host: &str, askpass_dir: &Path, prompt: Prompt) -> Result<Vec<(St
             ("GIT_CONFIG_VALUE_0".into(), "".into()), // don't let other helpers cache or override the token
         ]);
     }
-    let mut env: Vec<(String, String)> = vec![];
-    if prompt == Prompt::Silent {
-        env.push(("GCM_INTERACTIVE".into(), "never".into()));
-    }
-    if let Some(helper) = gcm_helper() {
-        if !gcm_configured() {
-            env.push(("GIT_CONFIG_COUNT".into(), "1".into()));
-            env.push(("GIT_CONFIG_KEY_0".into(), "credential.helper".into()));
-            env.push(("GIT_CONFIG_VALUE_0".into(), helper.into()));
-        }
-        // GCM on Linux refuses to run until a credential store is chosen; default to the desktop keyring.
-        #[cfg(all(unix, not(target_os = "macos")))]
-        if std::env::var_os("GCM_CREDENTIAL_STORE").is_none() {
-            let configured = Command::new("git").args(["config", "--get", "credential.credentialStore"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).output().map(|o| !o.stdout.is_empty()).unwrap_or(false);
-            if !configured {
-                env.push(("GCM_CREDENTIAL_STORE".into(), "secretservice".into()));
-            }
-        }
-    }
-    Ok(env)
+    Ok(gcm_env(prompt))
 }
 
 fn askpass_script(dir: &Path) -> Result<PathBuf> {

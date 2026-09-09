@@ -161,6 +161,21 @@ impl Git {
         self.run(&["fetch", "-q", "origin"]).map(|_| ())
     }
 
+    /// Fetch when first attaching a remote, tolerating a repository that does
+    /// not exist yet. Returns false when there was nothing on the other end, so
+    /// the caller knows to skip the merge and just push. Auth failures still
+    /// error — those the user has to fix.
+    pub fn fetch_optional(&self) -> Result<bool> {
+        if self.remote_url().is_none() {
+            return Ok(false);
+        }
+        match self.run(&["fetch", "-q", "origin"]) {
+            Ok(_) => Ok(true),
+            Err(AppError::Git(msg)) if remote_absent(&msg) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn merge_in_progress(&self) -> bool {
         self.dir.join(".git/MERGE_HEAD").exists()
     }
@@ -297,6 +312,21 @@ impl Git {
     }
 }
 
+/// Does this git failure mean "that repository is not there (yet)" rather than
+/// "you are not allowed in"? Only the first is safe to shrug off, so anything
+/// that smells like auth is excluded outright.
+fn remote_absent(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    if m.contains("permission denied") || m.contains("authentication") || m.contains("could not read username") || m.contains("access denied") || m.contains("403") {
+        return false;
+    }
+    m.contains("repository not found")            // GitHub, over HTTPS and SSH
+        || m.contains("not found")                 // fatal: repository '…' not found
+        || m.contains("could not be found")        // GitLab
+        || m.contains("does not appear to be a git repository")
+        || m.contains("repository does not exist")
+}
+
 fn exec(mut c: Command) -> Result<String> {
     let out = c.output().map_err(|e| AppError::Git(format!("could not run git: {e}")))?;
     if out.status.success() {
@@ -305,5 +335,25 @@ fn exec(mut c: Command) -> Result<String> {
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
         let msg = if err.is_empty() { String::from_utf8_lossy(&out.stdout).trim().to_string() } else { err };
         Err(AppError::Git(msg))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remote_absent;
+
+    #[test]
+    fn absent_means_missing_not_forbidden() {
+        // A repository that is not there yet: safe to skip the merge and push.
+        assert!(remote_absent("remote: Repository not found.\nfatal: repository 'https://github.com/you/secrets.git/' not found"));
+        assert!(remote_absent("ERROR: Repository not found.\nfatal: Could not read from remote repository."));
+        assert!(remote_absent("remote: The project you were looking for could not be found or you don't have permission to view it."));
+        assert!(remote_absent("fatal: 'origin' does not appear to be a git repository"));
+
+        // Auth trouble must surface, never be mistaken for an empty remote.
+        assert!(!remote_absent("git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository."));
+        assert!(!remote_absent("fatal: Authentication failed for 'https://github.com/you/secrets.git/'"));
+        assert!(!remote_absent("fatal: could not read Username for 'https://github.com': terminal prompts disabled"));
+        assert!(!remote_absent("remote: Write access to repository not granted.\nfatal: unable to access ...: The requested URL returned error: 403"));
     }
 }

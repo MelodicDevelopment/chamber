@@ -182,20 +182,31 @@ export class WelcomePage {
 		}
 	}
 
+	/**
+	 * The chamber is made locally first, so a repository URL that turns out to be
+	 * wrong leaves the user with a working chamber instead of nothing.
+	 */
 	async create() {
 		this.busy = 'create';
+		const url = this.remote.trim();
 		try {
-			await this.backend.createChamber(this.name.trim(), this.remote.trim() || undefined);
+			const chamber = await this.backend.createChamber(this.name.trim());
+			if (url) {
+				try {
+					await this.backend.attachRemote(chamber.id, url);
+					this.toast.success('Chamber created', 'Connected to your repository.');
+				} catch (e) {
+					const err = asAppError(e);
+					const why = err.kind === 'auth' ? 'That repository needs a sign-in.' : err.message;
+					this.toast.warning('Chamber created, but not synced', `${why} Connect it from Settings, or use Join to sign in first.`);
+				}
+			} else {
+				this.toast.success('Chamber created', 'You can connect a repository later.');
+			}
 			this.status = await this.backend.status();
 			this.step = 'done';
-			this.toast.success('Chamber created', this.remote.trim() ? 'Connected to your repository.' : 'You can connect a repository later.');
 		} catch (e) {
-			const err = asAppError(e);
-			if (err.kind === 'auth') {
-				this.toast.warning('Repository needs sign-in', 'Use Join instead to connect with a token or browser sign-in.');
-			} else {
-				this.toast.error('Could not create the chamber', err.message);
-			}
+			this.toast.error('Could not create the chamber', asAppError(e).message);
 		} finally {
 			this.busy = '';
 		}

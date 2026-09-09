@@ -5,6 +5,7 @@ use crate::chamber::{Chamber, Entry, Recipient};
 use crate::config::ChamberRef;
 use crate::error::{AppError, Result};
 use crate::git::{Git, Keep, LogEntry, SyncStatus};
+use crate::hosting;
 use crate::identity;
 use crate::AppState;
 use base64::Engine;
@@ -150,24 +151,53 @@ fn slug(s: &str) -> String {
     if s.is_empty() { "chamber".into() } else { s }
 }
 
+/// Make a chamber on this computer. Always local and always succeeds if the
+/// keychain is reachable; attaching a remote is `chamber_attach_remote`, kept
+/// separate so a URL that turns out to be wrong never costs the user the
+/// chamber they just made.
 #[tauri::command]
-pub async fn chamber_create(state: State<'_, AppState>, name: String, remote: Option<String>) -> Result<ChamberSummary> {
+pub async fn chamber_create(state: State<'_, AppState>, name: String) -> Result<ChamberSummary> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(AppError::msg("give the chamber a name"));
+    }
     let pk = identity::public_key()?;
     let (author, email) = state.config.lock().unwrap().author();
     let device = state.config.lock().unwrap().device_name();
     let dir = state.chambers_dir().join(format!("{}-{}", slug(&name), &uuid::Uuid::new_v4().to_string()[..8]));
-    let chamber = Chamber::create(&dir, &name, &pk, &format!("{author} ({device})"), (&author, &email))?;
-    if let Some(url) = remote.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        chamber.git.set_remote(url)?;
-        let info = auth::detect(url);
-        let env = if info.is_ssh { vec![] } else { auth::env_for(&info.host, &state.askpass_dir(), Prompt::Interactive)? };
-        let g = chamber.git.clone().with_env(env);
-        g.fetch()?;
-        g.merge_remote()?;
-        g.push()?;
-    }
-    let r = register(&state, &name, dir, remote.filter(|s| !s.trim().is_empty()))?;
+    Chamber::create(&dir, &name, &pk, &format!("{author} ({device})"), (&author, &email))?;
+    let r = register(&state, &name, dir, None)?;
     Ok(summarize(&state, &r, Some(&pk)))
+}
+
+/// Point an existing chamber at a git remote and do the first sync. Works for a
+/// repository that already has commits (fetch + merge) and for an empty or
+/// not-yet-created one (push only). The remote is only recorded once it pushes.
+#[tauri::command]
+pub async fn chamber_attach_remote(state: State<'_, AppState>, chamber_id: String, url: String) -> Result<ChamberSummary> {
+    let url = url.trim().to_string();
+    if url.is_empty() {
+        return Err(AppError::msg("give a repository URL"));
+    }
+    let (chamber, mut r) = open_chamber(&state, &chamber_id, Prompt::Interactive)?;
+    let info = auth::detect(&url);
+    let env = if info.is_ssh { vec![] } else { auth::env_for(&info.host, &state.askpass_dir(), Prompt::Interactive)? };
+    let g = chamber.git.clone().with_env(env);
+    g.set_remote(&url)?;
+    if g.fetch_optional()? {
+        g.merge_remote()?;
+    }
+    g.push()?;
+
+    r.remote = Some(url);
+    let mut cfg = state.config.lock().unwrap();
+    if let Some(entry) = cfg.chambers.iter_mut().find(|c| c.id == r.id) {
+        entry.remote = r.remote.clone();
+    }
+    cfg.save(&state.config_path)?;
+    drop(cfg);
+    let pk = identity::public_key().ok();
+    Ok(summarize(&state, &r, pk.as_deref()))
 }
 
 #[tauri::command]
@@ -412,6 +442,66 @@ pub async fn auth_store_token(state: State<'_, AppState>, url: String, username:
         return Err(e);
     }
     Ok(())
+}
+
+// ---- creating the remote repository -----------------------------------------
+
+/// Who Chamber is signed in as on a host. `connect` lets Git Credential Manager
+/// open the browser sign-in; without it this only reports what is already held,
+/// so the New chamber dialog can show state without prompting anyone.
+#[tauri::command]
+pub async fn host_account(host: String, connect: bool) -> Result<hosting::HostAccount> {
+    hosting::account(host.trim(), if connect { Prompt::Interactive } else { Prompt::Silent })
+}
+
+/// Begin the browser sign-in. Returns the code for the user to approve; the
+/// call is quick, and `host_sign_in_wait` does the waiting.
+#[tauri::command]
+pub async fn host_sign_in_start(state: State<'_, AppState>) -> Result<hosting::DeviceCode> {
+    state.sign_in_cancelled.store(false, std::sync::atomic::Ordering::Relaxed);
+    tauri::async_runtime::spawn_blocking(hosting::device_start).await.map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Wait for the user to approve the code, then keep the token. Runs off the
+/// async runtime because it polls for up to fifteen minutes.
+#[tauri::command]
+pub async fn host_sign_in_wait(state: State<'_, AppState>, host: String, code: hosting::DeviceCode) -> Result<hosting::HostAccount> {
+    let host = host.trim().to_string();
+    let cancelled = state.sign_in_cancelled.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let token = hosting::device_wait(&code, &cancelled)?;
+        hosting::adopt_token(&host, &token)
+    })
+    .await
+    .map_err(|e| AppError::msg(e.to_string()))?
+}
+
+/// Stop waiting on a sign-in the user walked away from.
+#[tauri::command]
+pub fn host_sign_in_cancel(state: State<AppState>) {
+    state.sign_in_cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Keep a token the user pasted, once the host confirms it. The universal rung:
+/// works for any account, and the only one for hosts with no browser sign-in.
+#[tauri::command]
+pub async fn host_store_token(host: String, token: String) -> Result<hosting::HostAccount> {
+    let (host, token) = (host.trim().to_string(), token.trim().to_string());
+    if token.is_empty() {
+        return Err(AppError::msg("paste a token first"));
+    }
+    tauri::async_runtime::spawn_blocking(move || hosting::adopt_token(&host, &token)).await.map_err(|e| AppError::msg(e.to_string()))?
+}
+
+#[tauri::command]
+pub async fn host_create_repo(host: String, owner: String, name: String, private: bool) -> Result<hosting::NewRepo> {
+    hosting::create_repo(host.trim(), owner.trim(), name.trim(), private)
+}
+
+/// Forget the host sign-in — ours and the helpers' copy.
+#[tauri::command]
+pub async fn host_disconnect(host: String) -> Result<()> {
+    auth::credential_forget(host.trim())
 }
 
 #[tauri::command]

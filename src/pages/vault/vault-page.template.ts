@@ -42,7 +42,7 @@ export function vaultPageTemplate(self: VaultPage) {
 					</div>
 					<div class="menu-sep"></div>
 					<div class="menu-list">
-						<div class="menu-action" @click=${() => self.openDialog('new-chamber')}><span class="tile"><ml-icon icon="plus"></ml-icon></span><span class="grow">New chamber</span><span class="state">Fresh repo, your key</span></div>
+						<div class="menu-action" @click=${() => self.openNewChamber()}><span class="tile"><ml-icon icon="plus"></ml-icon></span><span class="grow">New chamber</span><span class="state">Fresh repo, your key</span></div>
 						<div class="menu-action" @click=${() => self.router.navigate('/join')}><span class="tile"><ml-icon icon="users"></ml-icon></span><span class="grow">Join a chamber</span><span class="state">Someone shares a repo</span></div>
 					</div>
 				</div>` : ''}
@@ -106,7 +106,7 @@ export function vaultPageTemplate(self: VaultPage) {
 							<div class="big">No chamber yet</div>
 							<div>Create one, or join one someone shared with you.</div>
 							<div style="display:flex; gap:8px; margin-top:8px">
-								<ml-button variant="primary" @ml:click=${() => self.openDialog('new-chamber')}>New chamber</ml-button>
+								<ml-button variant="primary" @ml:click=${() => self.openNewChamber()}>New chamber</ml-button>
 								<ml-button variant="outline" @ml:click=${() => self.router.navigate('/join')}>Join a chamber</ml-button>
 							</div>
 						</div>` : !c.hasAccess ? html`
@@ -249,11 +249,96 @@ export function vaultPageTemplate(self: VaultPage) {
 		<ml-dialog #new-chamber id="new-chamber" size="sm">
 			<h3 slot="dialog-header">New chamber</h3>
 			<div class="dlg">
-				<p>A fresh repository, encrypted to your key. Add a remote now or later.</p>
-				<ml-input label="Name" .value=${self.newName} @ml:input=${(e: CustomEvent) => (self.newName = e.detail.value)}></ml-input>
-				<ml-input label="Repository URL (optional)" placeholder="git@github.com:you/secrets.git" .value=${self.newRemote} @ml:input=${(e: CustomEvent) => (self.newRemote = e.detail.value)}></ml-input>
+				<p>A fresh repository, encrypted to your key. Nothing leaves this computer unencrypted.</p>
+				<ml-input label="Name" placeholder="Work" .value=${self.newName} @ml:input=${(e: CustomEvent) => self.setNewName(e.detail.value)}></ml-input>
+
+				<div class="pick-label">Where it lives</div>
+				<div class="cards">
+					<div class="card-pick ${self.newWhere === 'local' ? 'on' : ''}" @click=${() => (self.newWhere = 'local')}>
+						<ml-icon icon="desktop" size="sm"></ml-icon>
+						<div class="t">Just this computer</div>
+						<div class="d">No remote, no account. Connect one later.</div>
+					</div>
+					<div class="card-pick ${self.newWhere === 'remote' ? 'on' : ''}" @click=${() => (self.newWhere = 'remote')}>
+						<ml-icon icon="cloud-arrow-up" size="sm"></ml-icon>
+						<div class="t">Sync to a repository</div>
+						<div class="d">Push to git so your other devices and keepers can open it.</div>
+					</div>
+				</div>
+
+				${self.newWhere === 'remote' ? html`
+					<div class="sub">
+						<div class="seg">
+							<button class="${self.newRepoMode === 'create' ? 'on' : ''}" @click=${() => (self.newRepoMode = 'create')}>Create it for me</button>
+							<button class="${self.newRepoMode === 'url' ? 'on' : ''}" @click=${() => (self.newRepoMode = 'url')}>I have a URL</button>
+						</div>
+						${self.newRepoMode === 'create' ? html`
+							<div class="sub">
+								${self.signIn ? html`
+									<div class="sub">
+										<div class="device">
+											<div class="lede">Type this code on GitHub to finish signing in.</div>
+											<div class="code" title="Click to copy" @click=${() => self.copy(self.signIn?.userCode ?? '', 'Code copied')}>${self.signIn.userCode}</div>
+											<div class="where">We opened <b>${self.signIn.verificationUri}</b> in your browser.</div>
+											<div class="btns">
+												<ml-button variant="outline" size="sm" @ml:click=${() => self.backend.openUrl(self.signIn?.verificationUri ?? '')}>Open again</ml-button>
+												<ml-button variant="ghost" size="sm" @ml:click=${() => self.cancelSignIn()}>Cancel</ml-button>
+											</div>
+											<ml-spinner size="sm"></ml-spinner>
+										</div>
+									</div>
+								` : !self.gitHost?.connected ? html`
+									<div class="sub">
+										<div class="connect">
+											<div class="grow">
+												<div class="t">${self.gitHost?.staleCredential ? 'That sign-in was refused' : 'Connect GitHub'}</div>
+												<div class="d">${self.gitHost?.note ?? 'Chamber uses a GitHub sign-in git already has on this computer, or opens a browser sign-in if there is none. Nothing is stored beyond the token.'}</div>
+											</div>
+											${self.gitHost?.staleCredential
+												? html`<ml-button variant="outline" size="sm" @ml:click=${() => self.disconnectHost()}>Clear it</ml-button>`
+												: html`<ml-button variant="primary" size="sm" ?loading=${self.busy === 'connect'} @ml:click=${() => self.connectHost()}><ml-icon slot="icon-start" icon="github-logo" format="fill"></ml-icon>Connect</ml-button>`}
+										</div>
+										${self.gitHost && !self.gitHost.canSignIn && !self.status?.gcmAvailable ? html`
+											<p class="fineprint warn"><ml-icon icon="warning" size="xs"></ml-icon>This build has no GitHub sign-in, and Git Credential Manager is not installed${self.gcmInstall?.command ? html` — <code>${self.gcmInstall.command}</code>` : ''}. Paste a token below, or use a repository URL.</p>` : ''}
+										${self.showTokenField ? html`
+											<ml-input label="Personal access token" type="password" placeholder="ghp_…" hint="Needs the repo scope so Chamber can create the repository and push." .value=${self.hostToken} @ml:input=${(e: CustomEvent) => (self.hostToken = e.detail.value)}></ml-input>
+											<div class="btns">
+												${self.gitHost?.tokenPage ? html`<ml-button variant="ghost" size="sm" @ml:click=${() => self.backend.openUrl(self.gitHost?.tokenPage ?? '')}><ml-icon slot="icon-start" icon="arrow-square-out" size="xs"></ml-icon>Make one</ml-button>` : ''}
+												<ml-button variant="primary" size="sm" ?disabled=${!self.hostToken.trim()} ?loading=${self.busy === 'connect'} @ml:click=${() => self.useToken()}>Use this token</ml-button>
+											</div>
+										` : html`
+											<p class="fineprint"><ml-icon icon="key" size="xs"></ml-icon><a href="#" @click=${(e: Event) => { e.preventDefault(); self.showTokenField = true; }}>Paste a token</a> instead, or <a href="#" @click=${(e: Event) => { e.preventDefault(); self.newRepoOnGitHub(); }}>make the repository on GitHub</a> and use <i>I have a URL</i>.</p>
+										`}
+									</div>
+								` : html`
+									<div class="sub">
+										<div class="connect on">
+											<ml-icon icon="check-circle" format="fill"></ml-icon>
+											<div class="grow"><div class="t">Signed in as ${self.gitHost?.login}</div><div class="d">Chamber will create the repository and push the first commit.</div></div>
+											<ml-button variant="ghost" size="xs" @ml:click=${() => self.disconnectHost()}>Disconnect</ml-button>
+										</div>
+										<div class="repo-row">
+											${(self.gitHost?.owners.length ?? 0) > 1 ? html`
+												<ml-select label="Owner" .value=${self.newRepoOwner} .options=${self.ownerOptions} @ml:change=${(e: CustomEvent) => (self.newRepoOwner = e.detail.value)}></ml-select>` : ''}
+											<ml-input label="Repository" placeholder="secrets" .value=${self.newRepoName} @ml:input=${(e: CustomEvent) => self.setRepoName(e.detail.value)}></ml-input>
+										</div>
+										<div class="seg small">
+											<button class="${self.newRepoPrivate ? 'on' : ''}" @click=${() => (self.newRepoPrivate = true)}><ml-icon icon="lock-simple" size="xs"></ml-icon>Private</button>
+											<button class="${!self.newRepoPrivate ? 'on' : ''}" @click=${() => (self.newRepoPrivate = false)}><ml-icon icon="globe-simple" size="xs"></ml-icon>Public</button>
+										</div>
+										${self.gitHost?.note ? html`<p class="fineprint warn"><ml-icon icon="warning" size="xs"></ml-icon>${self.gitHost.note}</p>` : ''}
+									</div>
+								`}
+							</div>
+						` : html`
+							<div class="sub">
+								<ml-input label="Repository URL" placeholder="git@github.com:you/secrets.git" hint="Any git host. Make the repository empty — Chamber pushes the first commit." .value=${self.newRemote} @ml:input=${(e: CustomEvent) => (self.newRemote = e.detail.value)}></ml-input>
+							</div>
+						`}
+					</div>
+				` : ''}
 			</div>
-			<div slot="dialog-footer"><ml-button variant="outline" @ml:click=${() => self.closeDialog('new-chamber')}>Cancel</ml-button><ml-button variant="primary" ?disabled=${!self.newName.trim()} ?loading=${self.busy === 'create'} @ml:click=${() => self.createChamber()}>Create</ml-button></div>
+			<div slot="dialog-footer"><ml-button variant="outline" @ml:click=${() => self.closeDialog('new-chamber')}>Cancel</ml-button><ml-button variant="primary" ?disabled=${!self.canCreateChamber} ?loading=${self.busy === 'create'} @ml:click=${() => self.createChamber()}>Create</ml-button></div>
 		</ml-dialog>
 
 		<ml-dialog #add id="add" size="md">

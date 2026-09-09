@@ -2,6 +2,7 @@
 import '@melodicdev/components/button';
 import '@melodicdev/components/input';
 import '@melodicdev/components/textarea';
+import '@melodicdev/components/select';
 import '@melodicdev/components/dialog';
 import '@melodicdev/components/icon';
 import '@melodicdev/components/badge';

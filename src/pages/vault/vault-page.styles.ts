@@ -179,6 +179,11 @@ export function vaultPageStyles() {
 		.pair .fine { font-size: 12px; color: var(--ml-color-text-subtle); line-height: 1.5; }
 		.pair .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 		.pair.compact { padding: 12px; gap: 14px; margin-top: 0; }
+		/* One stable root per conditional branch: the renderer tracks a nested
+		   template by the nodes it first rendered, so a branch whose top-level
+		   nodes change identity can leave orphans behind. */
+		.sub { display: flex; flex-direction: column; gap: 10px; }
+
 		.seg { display: flex; gap: 6px; }
 		.seg .chip ml-icon { margin-right: -2px; }
 		.scanrow { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
@@ -209,6 +214,47 @@ export function vaultPageStyles() {
 		[slot="dialog-footer"] { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 100%; box-sizing: border-box; }
 		[slot="dialog-footer"] ml-button { flex-shrink: 0; }
 		.pick-label { font-family: var(--ml-font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ml-color-text-subtle); }
+
+		/* New chamber: local vs. synced, then how the repository is got. */
+		.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+		.card-pick { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ml-color-border); background: var(--ml-color-background); cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+		.card-pick:hover { background: var(--ch-hover); }
+		.card-pick ml-icon { color: var(--ml-color-text-subtle); }
+		.card-pick .t { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--ml-color-text); }
+		.card-pick .d { margin-top: 2px; font-size: 11.5px; line-height: 1.45; color: var(--ml-color-text-subtle); }
+		.card-pick.on { border-color: var(--ch-brass); background: var(--ml-color-surface-raised); box-shadow: 0 0 0 1px var(--ch-brass) inset; }
+		.card-pick.on ml-icon { color: var(--ch-brass); }
+
+		/* One stable root per conditional branch: the renderer tracks a nested
+		   template by the nodes it first rendered, so a branch whose top-level
+		   nodes change identity can leave orphans behind. */
+		.sub { display: flex; flex-direction: column; gap: 10px; }
+
+		.seg { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--ml-color-background); border: 1px solid var(--ml-color-border); }
+		.seg button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 10px; border: 0; border-radius: 7px; background: none; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--ml-color-text-muted); cursor: pointer; }
+		.seg button:hover { color: var(--ml-color-text); }
+		.seg button.on { background: var(--ml-color-surface-raised); color: var(--ml-color-text); box-shadow: 0 0 0 1px var(--ml-color-border-strong); }
+		.seg.small button { padding: 5px 10px; font-size: 12px; }
+
+		.device { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 12px; border-radius: 12px; border: 1px solid var(--ml-color-border); background: var(--ml-color-background); text-align: center; }
+		.device .lede { font-size: 13px; color: var(--ml-color-text); }
+		.device .code { font-family: var(--ml-font-mono); font-size: 26px; font-weight: 600; letter-spacing: 0.18em; color: var(--ch-brass); cursor: pointer; padding: 4px 8px; border-radius: 8px; }
+		.device .code:hover { background: var(--ch-hover); }
+		.device .where { font-size: 11.5px; color: var(--ml-color-text-subtle); }
+		.device .btns { display: flex; gap: 6px; }
+		.dlg .btns { display: flex; gap: 6px; justify-content: flex-end; }
+		.dlg code { font-family: var(--ml-font-mono); font-size: 11px; padding: 1px 5px; border-radius: 5px; background: var(--ch-code-bg); }
+
+		.connect { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ml-color-border); background: var(--ml-color-background); }
+		.connect .t { font-size: 13px; font-weight: 600; color: var(--ml-color-text); }
+		.connect .d { margin-top: 2px; font-size: 11.5px; line-height: 1.45; color: var(--ml-color-text-subtle); }
+		.connect.on { border-color: color-mix(in srgb, var(--ch-verdigris) 45%, transparent); }
+		.connect.on > ml-icon { color: var(--ch-verdigris); }
+		.repo-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 8px; align-items: end; }
+		.repo-row > ml-input:only-child { grid-column: 1 / -1; }
+		.dlg .fineprint.warn { color: var(--ch-ember); }
+		.dlg .fineprint a { color: var(--ch-brass); text-decoration: none; }
+		.dlg .fineprint a:hover { text-decoration: underline; }
 		.pick { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow: auto; padding: 4px; border: 1px solid var(--ml-color-border); border-radius: 10px; background: var(--ml-color-background); }
 		.pick-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; color: var(--ml-color-text-muted); }
 		.pick-item:hover { background: var(--ch-hover); color: var(--ml-color-text); }

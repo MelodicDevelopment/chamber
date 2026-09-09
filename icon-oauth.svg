@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Logo for the GitHub OAuth app. Same keyhole mark as icon-source.svg, but
+       full-bleed and 1.23x larger: GitHub draws its own frame around it, so the
+       macOS icon inset would only make the mark look small. The mark stays well
+       inside a centred circle, in case the host crops to one. -->
+  <defs>
+    <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2CD86"/>
+      <stop offset="1" stop-color="#B87C34"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#221c15"/>
+      <stop offset="1" stop-color="#0a0908"/>
+    </linearGradient>
+    <radialGradient id="hearth" cx="0.5" cy="0.46" r="0.6">
+      <stop offset="0" stop-color="#D9A652" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#D9A652" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#hearth)"/>
+  <g transform="translate(256 256) scale(1.2319) translate(-256 -256)">
+    <circle cx="256" cy="256" r="138" fill="none" stroke="url(#brass)" stroke-width="18"/>
+    <circle cx="256" cy="256" r="96" fill="none" stroke="url(#brass)" stroke-width="8" opacity="0.5"/>
+    <path d="M256 190a42 42 0 0 0-19 79.5L223 326h66l-14-56.5A42 42 0 0 0 256 190z" fill="url(#brass)"/>
+  </g>
+</svg>

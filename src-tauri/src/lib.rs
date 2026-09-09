@@ -4,17 +4,21 @@ mod commands;
 mod config;
 mod error;
 mod git;
+mod hosting;
 mod identity;
 mod paths;
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 pub struct AppState {
     pub config_path: PathBuf,
     pub data_dir: PathBuf,
     pub config: Mutex<config::AppConfig>,
+    /// Set when the user abandons a browser sign-in, so its poll loop stops.
+    pub sign_in_cancelled: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -42,7 +46,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let config_path = config_dir.join("chambers.json");
             let config = config::AppConfig::load(&config_path).unwrap_or_default();
-            app.manage(AppState { config_path, data_dir, config: Mutex::new(config) });
+            app.manage(AppState { config_path, data_dir, config: Mutex::new(config), sign_in_cancelled: Arc::new(AtomicBool::new(false)) });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -52,6 +56,7 @@ pub fn run() {
             commands::recovery_kit_import,
             commands::recovery_mark_saved,
             commands::chamber_create,
+            commands::chamber_attach_remote,
             commands::chamber_join,
             commands::chamber_select,
             commands::chamber_set_folders,
@@ -75,6 +80,13 @@ pub fn run() {
             commands::auth_check,
             commands::auth_store_token,
             commands::auth_forget_token,
+            commands::host_account,
+            commands::host_sign_in_start,
+            commands::host_sign_in_wait,
+            commands::host_sign_in_cancel,
+            commands::host_store_token,
+            commands::host_create_repo,
+            commands::host_disconnect,
             commands::pick_files,
             commands::pick_folder,
             commands::pick_save_path,
