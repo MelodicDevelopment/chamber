@@ -70,7 +70,7 @@ export function vaultPageStyles() {
 		.user .name { font-size: 13px; font-weight: 500; }
 		.user .meta { font-size: 11px; color: var(--ml-color-text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-		.menu { position: fixed; left: 12px; top: 112px; width: 300px; z-index: 30; border-radius: 16px; background: var(--ch-popover); border: 1px solid var(--ml-color-border-strong); box-shadow: var(--ml-shadow-xl), 0 0 40px rgba(224, 166, 75, 0.12); overflow: hidden; }
+		.menu { position: fixed; left: 12px; top: 112px; width: 300px; z-index: 66; border-radius: 16px; background: var(--ch-popover); border: 1px solid var(--ml-color-border-strong); box-shadow: var(--ml-shadow-xl), 0 0 40px rgba(224, 166, 75, 0.12); overflow: hidden; }
 		.menu-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px 8px; }
 		.menu-list { padding: 0 6px 6px; display: flex; flex-direction: column; gap: 2px; }
 		.menu-item { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; }
