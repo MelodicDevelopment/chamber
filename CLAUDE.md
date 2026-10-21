@@ -31,9 +31,9 @@ src/
   shared/        env parsing/masking, formatting, keyhole mark, theme.ts (appearance), pairing.ts (QR payload), qr-code + qr-scanner components
   styles/global.css   Chamber theme: light tokens on :root, dark on :root[data-theme='dark'] (linked with `melodic-styles`)
 vite-plugin-melodic-styles.ts   copied from kingdom; required so --ml-* tokens reach shadow roots
-web/                  static marketing site (chamber.melodic.dev): nginx Dockerfile on Railway (project+service `chamber`, DNS at GoDaddy), docker-compose for local, og.png/sitemap/robots/404 for SEO. railway.toml is the deprecated CaC format; the migrate tool drops watchPatterns, so keep it until Railway forces the move (2026-12-01).
+web/                  source of the former marketing site (chamber.melodic.dev), kept for a possible relaunch; not deployed anywhere. The Railway project was deleted 2026-10-21. nginx Dockerfile + docker-compose still run it locally. The project page is now the GitHub repo; downloads are /releases.
 scripts/sign-windows.mjs   Windows Authenticode via Azure Trusted Signing, called by bundle.windows.signCommand
-.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed builds → notes from commit subjects → published; latest.json for the in-app updater). The site deploys from Railway's own GitHub connection (Root Directory `web`), not from Actions
+.github/workflows     ci.yml (typecheck, vite build, clippy -D warnings, cargo test), release.yml (tag → signed builds → notes from commit subjects → published; latest.json for the in-app updater, fetched from `releases/latest/download/latest.json` on GitHub)
 docs/release.md       signing/notarization setup + per-release checklist
 ```
 

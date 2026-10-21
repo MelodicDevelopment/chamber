@@ -93,8 +93,14 @@ AppImage, .deb, and .rpm. If distro signing ever matters, GPG-sign the .deb/.rpm
 4. When all three finish, the `publish` job writes the notes and publishes. Check the release has
    the installers (`.dmg`, `-setup.exe`, `.msi`, `.AppImage`, `.deb`, `.rpm`), `latest.json`, and
    the `.sig` files. Edit the notes afterwards with `gh release edit vX.Y.Z --notes` if needed.
-5. The marketing site's download button links to `releases/latest`, so it updates on its own.
-   The repository must be **public** for that link (and the README/LICENSE links on the site) to work for visitors.
+5. Confirm the updater manifest on GitHub now points at the new version:
+
+   ```sh
+   curl -sL https://github.com/MelodicDevelopment/chamber/releases/latest/download/latest.json | head -3
+   ```
+
+   It should print `"version": "X.Y.Z"`. Installed copies read this URL on launch, so the
+   repository must stay **public** for updates and the `/releases` download links to work.
 
 ## Verifying a build
 
@@ -116,15 +122,9 @@ the app is ad-hoc signed and will need right-click → Open the first time.
 
 ## Website
 
-The site deploys separately from the app. `web/` is built from its Dockerfile on Railway
-(project `chamber`, service `chamber`, environment `production`).
-
-- Public URL: https://chamber-production-a2cf.up.railway.app until DNS is in place, then
-  https://chamber.melodic.dev.
-- DNS: a `CNAME chamber` record pointing at the Railway target plus a `TXT _railway-verify.chamber`
-  record. `railway domain status chamber.melodic.dev` from `web/` prints both values and reports
-  when the certificate is issued.
-- Automatic deploys: the Railway service is connected to the GitHub repo with Root Directory
-  `web` and "Wait for CI" on, so pushes to `main` that touch `web/` rebuild `web/Dockerfile`
-  once ci.yml passes. There is no GitHub Actions deploy step.
-- Manual deploy: `cd web && railway up`.
+There is no hosted website. The project page is https://github.com/MelodicDevelopment/chamber
+and downloads are on its Releases page. The former marketing site (chamber.melodic.dev, Railway
+project `chamber`) was taken down on 2026-10-21; its source stays in `web/` so it can be relaunched.
+To bring it back: create a Railway service from this repo with Root Directory `web`, add the
+custom domain, and point a `CNAME chamber` record (plus the `TXT _railway-verify.chamber` record
+Railway asks for) at the new target. Nothing in the release pipeline depends on the site.
